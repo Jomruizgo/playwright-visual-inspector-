@@ -125,10 +125,15 @@ visual-inspector --url https://tu-sitio.com --width 1440 --height 768
 
 Los atajos se activan directamente en el browser abierto, sin necesidad de volver a la terminal.
 
-| Teclas         | Acción                    |
-|----------------|---------------------------|
-| Ctrl+Shift+S   | Inspeccionar vista actual |
-| Ctrl+Shift+X   | Cerrar herramienta        |
+| Teclas         | Modo idle                  | Modo manual                      |
+|----------------|----------------------------|----------------------------------|
+| Ctrl+Shift+S   | Auto-scan de la vista      | Capturar elemento seleccionado   |
+| Ctrl+Shift+M   | Activar modo manual        | Desactivar modo manual           |
+| Ctrl+Shift+X   | Cerrar herramienta         | Cerrar herramienta               |
+
+### Modo manual
+
+`Ctrl+Shift+M` activa un modo en el que puedes hacer clic sobre cualquier elemento de la página para ver su panel de estilos. Los paneles son arrastrables — los puedes reposicionar antes de tomar el screenshot con `Ctrl+Shift+S`. Las capturas manuales van al mismo reporte.
 
 ---
 
