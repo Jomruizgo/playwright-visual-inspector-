@@ -247,7 +247,7 @@ function generateSessionReport(sessionDir, metadata, autoCaps, manualCaps) {
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Sesión ${metadata.sessionNum}${metadata.isManual ? ' (manual)' : ''} — ${metadata.url}</title>
+<title>Sesión ${metadata.sessionNum}${metadata.isManual ? ' (manual)' : metadata.isQueued ? ' (cola)' : ''} — ${metadata.url}</title>
 <style>
   body { margin:0; background:#111; color:#ddd; font-family:sans-serif; }
   h1 { padding:16px; font-size:16px; background:#1e1e1e; margin:0; }
@@ -260,7 +260,7 @@ function generateSessionReport(sessionDir, metadata, autoCaps, manualCaps) {
 </style>
 </head>
 <body>
-<h1>Sesión ${metadata.sessionNum}${metadata.isManual ? ' — manual' : ''} — ${metadata.url}</h1>
+<h1>Sesión ${metadata.sessionNum}${metadata.isManual ? ' — manual' : metadata.isQueued ? ' — selección personalizada' : ''} — ${metadata.url}</h1>
 <h2>Viewport: ${metadata.vpW} × ${metadata.vpH} &nbsp;|&nbsp; ${new Date(metadata.timestamp).toLocaleString()} &nbsp;|&nbsp; ${(autoCaps || []).filter(Boolean).length + (manualCaps || []).filter(Boolean).length} capturas</h2>
 ${renderGrid(autoCaps, 'Auto-scan')}
 ${renderGrid(manualCaps, 'Capturas manuales')}
@@ -305,14 +305,15 @@ function generateMasterReport(outDir, sessions) {
 
 // ── Auto-scan de una sesión ───────────────────────────────────────────────────
 
-async function runInspection(page, vp, outDir, sessionNum) {
+async function runInspection(page, vp, outDir, sessionNum, prebuiltElements = null) {
   const url = page.url();
   const ts  = Date.now();
-  const sessionDir = path.join(outDir, `sesion-${String(sessionNum).padStart(3, '0')}-${ts}`);
+  const suffix = prebuiltElements ? '-cola' : '';
+  const sessionDir = path.join(outDir, `sesion-${String(sessionNum).padStart(3, '0')}-${ts}${suffix}`);
   fs.mkdirSync(sessionDir, { recursive: true });
 
   const hostname = new URL(url).hostname + new URL(url).pathname;
-  log(`Sesión ${sessionNum} iniciada (${hostname})`);
+  log(`Sesión ${sessionNum} iniciada (${hostname})${prebuiltElements ? ` — ${prebuiltElements.length} elementos en cola` : ''}`);
 
   // Vista completa
   await page.evaluate((vp) => {
@@ -327,9 +328,10 @@ async function runInspection(page, vp, outDir, sessionNum) {
   await page.screenshot({ path: path.join(sessionDir, '00-vista-completa.png') });
   await page.evaluate(() => document.querySelectorAll('.__vi_badge').forEach(e => e.remove()));
 
-  // Descubrir elementos
-  const elements = await discoverElements(page);
-  log(`  → ${elements.length} elementos en ${new Set(elements.map(e => e.category)).size} categorías`);
+  // Descubrir elementos (o usar lista pre-construida de la cola)
+  const elements = prebuiltElements ?? await discoverElements(page);
+  if (!prebuiltElements)
+    log(`  → ${elements.length} elementos en ${new Set(elements.map(e => e.category)).size} categorías`);
 
   if (elements.length === 0) {
     log('  → No se encontraron elementos visibles.');
@@ -359,13 +361,13 @@ async function runInspection(page, vp, outDir, sessionNum) {
     document.querySelectorAll('[data-__vi-disc]').forEach(el => { delete el.dataset.__viDisc; });
   });
 
-  const metadata = { sessionNum, url, vpW: vp.width, vpH: vp.height, timestamp: ts };
+  const metadata = { sessionNum, url, vpW: vp.width, vpH: vp.height, timestamp: ts, isQueued: !!prebuiltElements };
   generateSessionReport(sessionDir, metadata, captured, []);
 
   const count = captured.filter(Boolean).length;
   log(`  → Sesión ${sessionNum} completada. ${count} capturas en ${path.relative(process.cwd(), sessionDir)}/`);
 
-  return { dir: sessionDir, url, num: sessionNum, count };
+  return { dir: sessionDir, url, num: sessionNum, count, isQueued: !!prebuiltElements };
 }
 
 // ── Listeners inyectados en la página ────────────────────────────────────────
@@ -376,6 +378,17 @@ async function injectListeners(page, vp) {
     window.__vi_listener = true;
     window.__vi_mode = 'idle';
     window.__vi_el_A = null;
+    window.__vi_queue = [];
+    window.__vi_q_counter = 0;
+
+    window.__vi_clearQueue = function() {
+      window.__vi_queue.forEach(item => {
+        item.el.style.outline = ''; item.el.style.outlineOffset = '';
+        delete item.el.dataset.__viDisc;
+        if (item.badge) item.badge.remove();
+      });
+      window.__vi_queue = [];
+    };
 
     // ── makeDraggable ──────────────────────────────────────────────────────────
     window.__vi_drag = function(el) {
@@ -570,10 +583,15 @@ async function injectListeners(page, vp) {
       if (!e.ctrlKey || !e.shiftKey) return;
       if (e.key === 'S') {
         e.preventDefault();
-        console.log(window.__vi_mode === 'manual' ? '__CAPTURE_MANUAL__' : '__INSPECT__');
+        if      (window.__vi_mode === 'manual') console.log('__CAPTURE_MANUAL__');
+        else if (window.__vi_mode === 'queue')  console.log(window.__vi_queue.length ? '__INSPECT_QUEUED__' : '__QUEUE_EMPTY__');
+        else                                    console.log('__INSPECT__');
       } else if (e.key === 'M') {
         e.preventDefault();
         console.log('__TOGGLE_MANUAL__');
+      } else if (e.key === 'Q') {
+        e.preventDefault();
+        console.log('__TOGGLE_QUEUE__');
       } else if (e.key === 'X') {
         e.preventDefault();
         console.log('__EXIT__');
@@ -609,6 +627,44 @@ async function injectListeners(page, vp) {
         window.__vi_el_A       = el;
         window.__vi_showPanel(el);
       }
+    }, true);
+
+    // ── Alt+clic (modo cola de selección) ─────────────────────────────────────
+    document.addEventListener('click', (e) => {
+      if (window.__vi_mode !== 'queue' || !e.altKey) return;
+      let node = e.target;
+      while (node) {
+        const cls = typeof node.className === 'string' ? node.className : '';
+        if (cls.includes('__vi_status') || cls.includes('__vi_queue_badge')) return;
+        node = node.parentElement;
+      }
+      e.preventDefault(); e.stopPropagation();
+      const el = e.target;
+      const existingIdx = window.__vi_queue.findIndex(item => item.el === el);
+      if (existingIdx !== -1) {
+        // Quitar de la cola
+        const item = window.__vi_queue.splice(existingIdx, 1)[0];
+        item.el.style.outline = ''; item.el.style.outlineOffset = '';
+        delete item.el.dataset.__viDisc;
+        if (item.badge) item.badge.remove();
+        // Renumerar badges restantes
+        window.__vi_queue.forEach((it, i) => { if (it.badge) it.badge.textContent = i + 1; });
+      } else {
+        // Añadir a la cola
+        const discIdx = `q_${++window.__vi_q_counter}`;
+        el.dataset.__viDisc    = discIdx;
+        el.style.outline       = '2px solid #a29bfe';
+        el.style.outlineOffset = '2px';
+        const rec = el.getBoundingClientRect();
+        const badge = document.createElement('div');
+        badge.className = '__vi_queue_badge';
+        badge.textContent = window.__vi_queue.length + 1;
+        badge.style.cssText = `position:fixed;left:${Math.round(rec.left)}px;top:${Math.round(rec.top)}px;min-width:16px;background:#a29bfe;color:#1e1e1e;font-family:monospace;font-size:10px;font-weight:700;text-align:center;padding:1px 4px;border-radius:3px;z-index:2147483647;pointer-events:none`;
+        document.body.appendChild(badge);
+        window.__vi_queue.push({ el, discIdx, badge });
+      }
+      const s = document.querySelector('.__vi_status');
+      if (s) s.textContent = `⬡ Cola (${window.__vi_queue.length}) — Alt+clic añade/quita | Ctrl+Shift+S escanea | Ctrl+Shift+Q cancela`;
     }, true);
 
   }, { vpW: vp.width, vpH: vp.height });
@@ -649,7 +705,7 @@ async function main() {
   const inject = async () => {
     try {
       await injectListeners(page, vp);
-      await injectStatusBadge(page, '⏸ Listo  (Ctrl+Shift+S = auto | Ctrl+Shift+M = manual | Ctrl+Shift+X = cerrar)');
+      await injectStatusBadge(page, '⏸ Listo  (S=auto | M=manual | Q=cola | X=cerrar)  [Ctrl+Shift+…]');
     } catch { /* navegación en curso */ }
   };
 
@@ -657,7 +713,7 @@ async function main() {
   await inject();
 
   log('Browser abierto. Navega a la vista que quieras documentar.');
-  log('Ctrl+Shift+S → auto-scan  |  Ctrl+Shift+M → modo manual  |  Ctrl+Shift+X → cerrar');
+  log('Ctrl+Shift+S → auto-scan  |  Ctrl+Shift+M → manual  |  Ctrl+Shift+Q → cola  |  Ctrl+Shift+X → cerrar');
   log('');
 
   let sessionNum    = 0;
@@ -730,6 +786,71 @@ async function main() {
         manualDir = null;
         await inject();
       }
+    }
+
+    // ── Toggle modo cola ──────────────────────────────────────────────────────
+    if (text === '__TOGGLE_QUEUE__') {
+      const isQueue = await page.evaluate(() => window.__vi_mode === 'queue');
+      if (isQueue) {
+        await page.evaluate(() => {
+          window.__vi_clearQueue();
+          window.__vi_mode = 'idle';
+          document.body.style.cursor = '';
+        });
+        await inject();
+        log('Modo cola desactivado');
+      } else {
+        await page.evaluate(() => {
+          window.__vi_mode = 'queue';
+          document.body.style.cursor = 'cell';
+          const s = document.querySelector('.__vi_status');
+          if (s) { s.style.borderColor = '#a29bfe'; s.style.color = '#a29bfe'; s.textContent = '⬡ Cola — Alt+clic en los elementos que quieres escanear | Ctrl+Shift+Q cancela'; }
+        });
+        log('Modo cola activado — Alt+clic en los elementos que quieres escanear, luego Ctrl+Shift+S');
+      }
+    }
+
+    // ── Escanear cola de selección ────────────────────────────────────────────
+    if (text === '__INSPECT_QUEUED__') {
+      sessionNum++;
+      try {
+        const queuedElements = await page.evaluate(() =>
+          window.__vi_queue.map(item => {
+            const el = item.el;
+            const r  = el.getBoundingClientRect();
+            return {
+              category: 'Seleccion',
+              color:    '#a29bfe',
+              tag:      el.tagName.toLowerCase(),
+              classList: [...el.classList].slice(0, 3).join('.'),
+              text:     el.textContent.trim().substring(0, 60),
+              discIdx:  item.discIdx,
+              rect:     { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height },
+            };
+          })
+        );
+        // Quitar badges numéricos antes del scan (outlines se reemplazarán en captureElement)
+        await page.evaluate(() => {
+          document.querySelectorAll('.__vi_queue_badge').forEach(e => e.remove());
+        });
+        await injectStatusBadge(page, `⬡ Escaneando cola (${queuedElements.length} elementos)...`);
+        const session = await runInspection(page, vp, out, sessionNum, queuedElements);
+        allSessions.push(session);
+        // Limpiar cola y salir del modo
+        await page.evaluate(() => {
+          window.__vi_clearQueue();
+          window.__vi_mode = 'idle';
+          document.body.style.cursor = '';
+        });
+        await inject();
+      } catch (err) {
+        log(`Error en escaneo de cola: ${err.message}`);
+        await inject();
+      }
+    }
+
+    if (text === '__QUEUE_EMPTY__') {
+      log('Cola vacía — usa Alt+clic para añadir elementos primero');
     }
 
     // ── Captura manual ────────────────────────────────────────────────────────
