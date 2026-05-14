@@ -1,0 +1,306 @@
+export async function injectListeners(page, vp) {
+  await page.evaluate(({ vpW, vpH }) => {
+    if (window.__vi_listener) return;
+    window.__vi_listener = true;
+    window.__vi_mode = 'idle';
+    window.__vi_el_A = null;
+    window.__vi_queue = [];
+    window.__vi_q_counter = 0;
+
+    window.__vi_clearQueue = function() {
+      window.__vi_queue.forEach(item => {
+        item.el.style.outline = ''; item.el.style.outlineOffset = '';
+        delete item.el.dataset.__viDisc;
+        if (item.badge) item.badge.remove();
+      });
+      window.__vi_queue = [];
+    };
+
+    // ── makeDraggable ──────────────────────────────────────────────────────────
+    window.__vi_drag = function(el) {
+      el.style.cursor = 'move';
+      el.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const r = el.getBoundingClientRect();
+        el.style.right = 'auto'; el.style.bottom = 'auto';
+        el.style.left = r.left + 'px'; el.style.top = r.top + 'px';
+        const dx = e.clientX - r.left, dy = e.clientY - r.top;
+        const mv = (ev) => { el.style.left = (ev.clientX - dx) + 'px'; el.style.top = (ev.clientY - dy) + 'px'; };
+        const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
+        document.addEventListener('mousemove', mv);
+        document.addEventListener('mouseup', up);
+        e.preventDefault(); e.stopPropagation();
+      });
+    };
+
+    // ── showPanel (modo manual) ────────────────────────────────────────────────
+    window.__vi_showPanel = function(el) {
+      document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
+
+      const cs  = window.getComputedStyle(el);
+      const rec = el.getBoundingClientRect();
+      const cls = [...el.classList].slice(0, 3).join('.');
+
+      const rows = [
+        ['element',       el.tagName.toLowerCase() + (cls ? '.' + cls : '')],
+        ['content',       el.textContent.trim().substring(0, 60) || '—'],
+        ['───────────', ''],
+        ['font-family',   cs.fontFamily],
+        ['font-size',     cs.fontSize],
+        ['font-weight',   cs.fontWeight],
+        ['color',         cs.color],
+        ['background',    cs.backgroundColor],
+        ['text-align',    cs.textAlign],
+        ['───────────', ''],
+        ['width',         Math.round(rec.width)  + 'px'],
+        ['height',        Math.round(rec.height) + 'px'],
+        ['padding',       cs.padding],
+        ['margin',        cs.margin],
+        ['border',        cs.border],
+        ['overflow-x',    cs.overflowX],
+        ['text-overflow', cs.textOverflow],
+        ['white-space',   cs.whiteSpace],
+        ['───────────', ''],
+        ['pos x',         Math.round(rec.left) + 'px'],
+        ['pos y',         Math.round(rec.top)  + 'px'],
+      ];
+
+      const PANEL_W = 480, PANEL_H = rows.length * 18 + 28;
+      const OUTLINE = 4, GAP = 12;
+      const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
+      const cands = [
+        { left: exp.right + GAP,          top: Math.max(8, exp.top) },
+        { left: exp.left - GAP - PANEL_W, top: Math.max(8, exp.top) },
+        { left: Math.max(8, exp.left),    top: exp.bottom + GAP },
+        { left: Math.max(8, exp.left),    top: exp.top - GAP - PANEL_H },
+      ];
+      let pos = null;
+      for (const c of cands) {
+        const p = { ...c, right: c.left + PANEL_W, bottom: c.top + PANEL_H };
+        if (p.left < 8 || p.right > vpW - 8 || p.top < 8 || p.bottom > vpH - 8) continue;
+        if (!(p.right < exp.left || p.left > exp.right || p.bottom < exp.top || p.top > exp.bottom)) { pos = c; break; }
+      }
+      if (!pos) {
+        const cx = (exp.left + exp.right) / 2, cy = (exp.top + exp.bottom) / 2;
+        pos = { left: cx < vpW / 2 ? vpW - PANEL_W - 8 : 8, top: cy < vpH / 2 ? vpH - PANEL_H - 8 : 8 };
+      }
+
+      const KEY_W = 14;
+      const lines = rows.map(([k, v]) => {
+        if (k.startsWith('───')) return `<span style="color:#555">${k}</span>`;
+        return `<span style="color:#808080">${(k + ' ').padEnd(KEY_W, '·')}</span> <span style="color:#9cdcfe">${v || ''}</span>`;
+      });
+
+      const panel = document.createElement('div');
+      panel.className = '__vi_overlay';
+      panel.style.cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:8px 10px 10px;border-radius:6px;border:1.5px solid #f1c40f;z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.7);white-space:pre`;
+      panel.innerHTML = `<div style="color:#f1c40f;font-weight:700;margin-bottom:4px">✦ ${el.tagName.toLowerCase()}</div>` + lines.join('\n');
+      document.body.appendChild(panel);
+      window.__vi_drag(panel);
+
+      const badge = document.createElement('div');
+      badge.className = '__vi_badge';
+      badge.textContent = `${vpW} × ${vpH}`;
+      badge.style.cssText = 'position:fixed;bottom:8px;right:8px;background:rgba(0,0,0,.65);color:#fff;font-family:monospace;font-size:11px;padding:3px 8px;border-radius:3px;z-index:2147483647';
+      document.body.appendChild(badge);
+      window.__vi_drag(badge);
+
+      const s = document.querySelector('.__vi_status');
+      if (s) s.textContent = '✦ Manual — Shift+clic para comparar | Ctrl+Shift+S para capturar | Ctrl+Shift+M para salir';
+    };
+
+    // ── showComparison (Shift+clic sobre segundo elemento) ─────────────────────
+    window.__vi_showComparison = function(elA, elB) {
+      document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
+
+      const recA = elA.getBoundingClientRect();
+      const recB = elB.getBoundingClientRect();
+
+      elA.style.outline      = '2px solid #f1c40f'; elA.style.outlineOffset = '2px'; elA.dataset.__vi = '1';
+      elB.style.outline      = '2px solid #e74c3c'; elB.style.outlineOffset = '2px'; elB.dataset.__vi = '1';
+
+      // SVG conector entre centros
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.className = '__vi_connector';
+      svg.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483646';
+      const cx1 = recA.left + recA.width  / 2, cy1 = recA.top + recA.height / 2;
+      const cx2 = recB.left + recB.width  / 2, cy2 = recB.top + recB.height / 2;
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      ln.setAttribute('x1', cx1); ln.setAttribute('y1', cy1);
+      ln.setAttribute('x2', cx2); ln.setAttribute('y2', cy2);
+      ln.setAttribute('stroke', 'rgba(255,255,255,0.45)');
+      ln.setAttribute('stroke-width', '1.5');
+      ln.setAttribute('stroke-dasharray', '6,4');
+      svg.appendChild(ln);
+      [[cx1, cy1, '#f1c40f'], [cx2, cy2, '#e74c3c']].forEach(([cx, cy, fill]) => {
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', '4'); c.setAttribute('fill', fill);
+        svg.appendChild(c);
+      });
+      document.body.appendChild(svg);
+
+      // Deltas
+      const THRESHOLD = 2;
+      const fmt = (v) => Math.round(v) + 'px';
+      const delta = (a, b) => {
+        const d = Math.round(b - a);
+        return { a: fmt(a), b: fmt(b), d: (d >= 0 ? '+' : '') + d + 'px', ok: Math.abs(d) <= THRESHOLD };
+      };
+      const comparisons = [
+        ['left',   delta(recA.left,   recB.left)],
+        ['top',    delta(recA.top,    recB.top)],
+        ['right',  delta(recA.right,  recB.right)],
+        ['bottom', delta(recA.bottom, recB.bottom)],
+        ['width',  delta(recA.width,  recB.width)],
+        ['height', delta(recA.height, recB.height)],
+      ];
+      const aligned    = comparisons.filter(([, d]) => d.ok).length;
+      const misaligned = comparisons.length - aligned;
+
+      const labelA = elA.tagName.toLowerCase() + ([...elA.classList].slice(0,2).join('.') ? '.' + [...elA.classList].slice(0,2).join('.') : '');
+      const labelB = elB.tagName.toLowerCase() + ([...elB.classList].slice(0,2).join('.') ? '.' + [...elB.classList].slice(0,2).join('.') : '');
+
+      const tableRows = comparisons.map(([prop, d]) => {
+        const clr = d.ok ? '#27ae60' : '#e74c3c';
+        return `<tr><td style="color:#808080;padding-right:8px">${prop}</td><td style="color:#f1c40f;text-align:right;padding-right:8px">${d.a}</td><td style="color:#e74c3c;text-align:right;padding-right:8px">${d.b}</td><td style="color:${clr};text-align:right;padding-right:6px">${d.d}</td><td style="color:${clr}">${d.ok ? '✓' : '⚠'}</td></tr>`;
+      }).join('');
+
+      const PANEL_W = 420, PANEL_H = 210;
+      const combined = {
+        left:   Math.min(recA.left,   recB.left)   - 4,
+        top:    Math.min(recA.top,    recB.top)    - 4,
+        right:  Math.max(recA.right,  recB.right)  + 4,
+        bottom: Math.max(recA.bottom, recB.bottom) + 4,
+      };
+      const cands = [
+        { left: combined.right + 12,           top: Math.max(8, combined.top) },
+        { left: combined.left  - 12 - PANEL_W, top: Math.max(8, combined.top) },
+        { left: Math.max(8, combined.left),    top: combined.bottom + 12 },
+        { left: Math.max(8, combined.left),    top: combined.top - 12 - PANEL_H },
+      ];
+      let pos = null;
+      for (const c of cands) {
+        const p = { ...c, right: c.left + PANEL_W, bottom: c.top + PANEL_H };
+        if (p.left < 8 || p.right > vpW - 8 || p.top < 8 || p.bottom > vpH - 8) continue;
+        if (!(p.right < combined.left || p.left > combined.right || p.bottom < combined.top || p.top > combined.bottom)) { pos = c; break; }
+      }
+      if (!pos) pos = { left: vpW - PANEL_W - 8, top: vpH - PANEL_H - 8 };
+
+      const panel = document.createElement('div');
+      panel.className = '__vi_overlay';
+      panel.style.cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:10px 12px;border-radius:6px;border:1.5px solid #9b59b6;z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.8)`;
+      panel.innerHTML = `<div style="color:#9b59b6;font-weight:700;margin-bottom:5px">⟺ Comparación de alineación</div><div style="margin-bottom:6px;font-size:10px"><span style="color:#f1c40f">A: ${labelA}</span> &nbsp; <span style="color:#e74c3c">B: ${labelB}</span></div><table style="border-collapse:collapse;width:100%"><tr style="font-size:10px;color:#555"><td style="padding-right:8px"></td><td style="color:#f1c40f;text-align:right;padding-right:8px">A</td><td style="color:#e74c3c;text-align:right;padding-right:8px">B</td><td style="text-align:right;padding-right:6px">Δ</td><td></td></tr>${tableRows}</table><div style="margin-top:7px;border-top:1px solid #333;padding-top:5px;font-size:10px"><span style="color:#27ae60">✓ ${aligned} alineados</span>${misaligned > 0 ? ` &nbsp; <span style="color:#e74c3c">⚠ ${misaligned} desviados</span>` : ''}</div>`;
+      document.body.appendChild(panel);
+      window.__vi_drag(panel);
+
+      const badge = document.createElement('div');
+      badge.className = '__vi_badge';
+      badge.textContent = `${vpW} × ${vpH}`;
+      badge.style.cssText = 'position:fixed;bottom:8px;right:8px;background:rgba(0,0,0,.65);color:#fff;font-family:monospace;font-size:11px;padding:3px 8px;border-radius:3px;z-index:2147483647';
+      document.body.appendChild(badge);
+      window.__vi_drag(badge);
+
+      const s = document.querySelector('.__vi_status');
+      if (s) s.textContent = '⟺ Comparación — Ctrl+Shift+S para capturar | clic para nueva selección';
+    };
+
+    // ── keydown ────────────────────────────────────────────────────────────────
+    document.addEventListener('keydown', (e) => {
+      if (!e.ctrlKey || !e.shiftKey) return;
+      if (e.key === 'S') {
+        e.preventDefault();
+        if      (window.__vi_mode === 'manual') console.log('__CAPTURE_MANUAL__');
+        else if (window.__vi_mode === 'queue')  console.log(window.__vi_queue.length ? '__INSPECT_QUEUED__' : '__QUEUE_EMPTY__');
+        else                                    console.log('__INSPECT__');
+      } else if (e.key === 'M') {
+        e.preventDefault();
+        console.log('__TOGGLE_MANUAL__');
+      } else if (e.key === 'Q') {
+        e.preventDefault();
+        console.log('__TOGGLE_QUEUE__');
+      } else if (e.key === 'X') {
+        e.preventDefault();
+        console.log('__EXIT__');
+      }
+    });
+
+    // ── click (modo manual) ────────────────────────────────────────────────────
+    document.addEventListener('click', (e) => {
+      if (window.__vi_mode !== 'manual') return;
+      let node = e.target;
+      while (node) {
+        const cls = typeof node.className === 'string' ? node.className : '';
+        if (cls.includes('__vi_overlay') || cls.includes('__vi_badge') || cls.includes('__vi_status')) return;
+        node = node.parentElement;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      const el = e.target;
+
+      if (e.shiftKey && window.__vi_el_A && window.__vi_el_A !== el) {
+        window.__vi_showComparison(window.__vi_el_A, el);
+      } else {
+        document.querySelectorAll('[data-__vi]').forEach(prev => {
+          prev.style.outline = ''; prev.style.outlineOffset = ''; delete prev.dataset.__vi;
+        });
+        document.querySelectorAll('.__vi_connector').forEach(c => c.remove());
+        el.style.outline       = '2px solid #f1c40f';
+        el.style.outlineOffset = '2px';
+        el.dataset.__vi        = '1';
+        window.__vi_el_A       = el;
+        window.__vi_showPanel(el);
+      }
+    }, true);
+
+    // ── Alt+clic (modo cola de selección) ─────────────────────────────────────
+    document.addEventListener('click', (e) => {
+      if (window.__vi_mode !== 'queue' || !e.altKey) return;
+      let node = e.target;
+      while (node) {
+        const cls = typeof node.className === 'string' ? node.className : '';
+        if (cls.includes('__vi_status') || cls.includes('__vi_queue_badge')) return;
+        node = node.parentElement;
+      }
+      e.preventDefault(); e.stopPropagation();
+      const el = e.target;
+      const existingIdx = window.__vi_queue.findIndex(item => item.el === el);
+      if (existingIdx !== -1) {
+        const item = window.__vi_queue.splice(existingIdx, 1)[0];
+        item.el.style.outline = ''; item.el.style.outlineOffset = '';
+        delete item.el.dataset.__viDisc;
+        if (item.badge) item.badge.remove();
+        window.__vi_queue.forEach((it, i) => { if (it.badge) it.badge.textContent = i + 1; });
+      } else {
+        const discIdx = `q_${++window.__vi_q_counter}`;
+        el.dataset.__viDisc    = discIdx;
+        el.style.outline       = '2px solid #a29bfe';
+        el.style.outlineOffset = '2px';
+        const rec = el.getBoundingClientRect();
+        const badge = document.createElement('div');
+        badge.className = '__vi_queue_badge';
+        badge.textContent = window.__vi_queue.length + 1;
+        badge.style.cssText = `position:fixed;left:${Math.round(rec.left)}px;top:${Math.round(rec.top)}px;min-width:16px;background:#a29bfe;color:#1e1e1e;font-family:monospace;font-size:10px;font-weight:700;text-align:center;padding:1px 4px;border-radius:3px;z-index:2147483647;pointer-events:none`;
+        document.body.appendChild(badge);
+        window.__vi_queue.push({ el, discIdx, badge });
+      }
+      const s = document.querySelector('.__vi_status');
+      if (s) s.textContent = `⬡ Cola (${window.__vi_queue.length}) — Alt+clic añade/quita | Ctrl+Shift+S escanea | Ctrl+Shift+Q cancela`;
+    }, true);
+
+  }, { vpW: vp.width, vpH: vp.height });
+}
+
+export async function injectStatusBadge(page, text) {
+  await page.evaluate((t) => {
+    let s = document.querySelector('.__vi_status');
+    const isNew = !s;
+    if (isNew) {
+      s = document.createElement('div');
+      s.className = '__vi_status';
+      s.style.cssText = 'position:fixed;top:8px;right:8px;background:#1e1e1e;color:#27ae60;font-family:monospace;font-size:12px;padding:5px 10px;border-radius:5px;border:1px solid #27ae60;z-index:2147483647';
+      document.body.appendChild(s);
+      if (window.__vi_drag) window.__vi_drag(s);
+    }
+    s.textContent = t;
+  }, text);
+}
