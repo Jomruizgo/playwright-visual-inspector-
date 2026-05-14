@@ -137,7 +137,7 @@ async function captureElement(page, el, vp, sessionDir, idx) {
 
   // Paso 2: inyectar panel y capturar
   const ok = await page.evaluate(({ discIdx, color, classList, vpW, vpH }) => {
-    document.querySelectorAll('.__vi_overlay, .__vi_badge').forEach(e => e.remove());
+    document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
 
     const el = document.querySelector(`[data-__vi-disc="${discIdx}"]`);
     if (!el) return false;
@@ -222,7 +222,7 @@ async function captureElement(page, el, vp, sessionDir, idx) {
   await page.screenshot({ path: filename });
 
   await page.evaluate(() => {
-    document.querySelectorAll('.__vi_overlay, .__vi_badge').forEach(e => e.remove());
+    document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
     document.querySelectorAll('[data-__vi]').forEach(el => {
       el.style.outline = ''; el.style.outlineOffset = ''; delete el.dataset.__vi;
     });
@@ -316,7 +316,7 @@ async function runInspection(page, vp, outDir, sessionNum) {
 
   // Vista completa
   await page.evaluate((vp) => {
-    document.querySelectorAll('.__vi_overlay, .__vi_badge').forEach(e => e.remove());
+    document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
     const b = document.createElement('div');
     b.className = '__vi_badge';
     b.textContent = `${vp.width} × ${vp.height}`;
@@ -375,6 +375,7 @@ async function injectListeners(page, vp) {
     if (window.__vi_listener) return;
     window.__vi_listener = true;
     window.__vi_mode = 'idle';
+    window.__vi_el_A = null;
 
     // ── makeDraggable ──────────────────────────────────────────────────────────
     window.__vi_drag = function(el) {
@@ -395,7 +396,7 @@ async function injectListeners(page, vp) {
 
     // ── showPanel (usado por el click handler del modo manual) ─────────────────
     window.__vi_showPanel = function(el) {
-      document.querySelectorAll('.__vi_overlay, .__vi_badge').forEach(e => e.remove());
+      document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
 
       const cs  = window.getComputedStyle(el);
       const rec = el.getBoundingClientRect();
@@ -466,7 +467,102 @@ async function injectListeners(page, vp) {
       window.__vi_drag(badge);
 
       const s = document.querySelector('.__vi_status');
-      if (s) s.textContent = '✦ Manual — Ctrl+Shift+S para capturar | Ctrl+Shift+M para salir';
+      if (s) s.textContent = '✦ Manual — Shift+clic para comparar | Ctrl+Shift+S para capturar | Ctrl+Shift+M para salir';
+    };
+
+    // ── showComparison (shift+clic sobre segundo elemento) ─────────────────────
+    window.__vi_showComparison = function(elA, elB) {
+      document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
+
+      const recA = elA.getBoundingClientRect();
+      const recB = elB.getBoundingClientRect();
+
+      elA.style.outline      = '2px solid #f1c40f'; elA.style.outlineOffset = '2px'; elA.dataset.__vi = '1';
+      elB.style.outline      = '2px solid #e74c3c'; elB.style.outlineOffset = '2px'; elB.dataset.__vi = '1';
+
+      // SVG conector entre centros
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.className = '__vi_connector';
+      svg.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483646';
+      const cx1 = recA.left + recA.width  / 2, cy1 = recA.top + recA.height / 2;
+      const cx2 = recB.left + recB.width  / 2, cy2 = recB.top + recB.height / 2;
+      const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      ln.setAttribute('x1', cx1); ln.setAttribute('y1', cy1);
+      ln.setAttribute('x2', cx2); ln.setAttribute('y2', cy2);
+      ln.setAttribute('stroke', 'rgba(255,255,255,0.45)');
+      ln.setAttribute('stroke-width', '1.5');
+      ln.setAttribute('stroke-dasharray', '6,4');
+      svg.appendChild(ln);
+      [[cx1, cy1, '#f1c40f'], [cx2, cy2, '#e74c3c']].forEach(([cx, cy, fill]) => {
+        const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', '4'); c.setAttribute('fill', fill);
+        svg.appendChild(c);
+      });
+      document.body.appendChild(svg);
+
+      // Deltas
+      const THRESHOLD = 2;
+      const fmt = (v) => Math.round(v) + 'px';
+      const delta = (a, b) => {
+        const d = Math.round(b - a);
+        return { a: fmt(a), b: fmt(b), d: (d >= 0 ? '+' : '') + d + 'px', ok: Math.abs(d) <= THRESHOLD };
+      };
+      const comparisons = [
+        ['left',   delta(recA.left,   recB.left)],
+        ['top',    delta(recA.top,    recB.top)],
+        ['right',  delta(recA.right,  recB.right)],
+        ['bottom', delta(recA.bottom, recB.bottom)],
+        ['width',  delta(recA.width,  recB.width)],
+        ['height', delta(recA.height, recB.height)],
+      ];
+      const aligned    = comparisons.filter(([, d]) => d.ok).length;
+      const misaligned = comparisons.length - aligned;
+
+      const labelA = elA.tagName.toLowerCase() + ([...elA.classList].slice(0,2).join('.') ? '.' + [...elA.classList].slice(0,2).join('.') : '');
+      const labelB = elB.tagName.toLowerCase() + ([...elB.classList].slice(0,2).join('.') ? '.' + [...elB.classList].slice(0,2).join('.') : '');
+
+      const tableRows = comparisons.map(([prop, d]) => {
+        const clr = d.ok ? '#27ae60' : '#e74c3c';
+        return `<tr><td style="color:#808080;padding-right:8px">${prop}</td><td style="color:#f1c40f;text-align:right;padding-right:8px">${d.a}</td><td style="color:#e74c3c;text-align:right;padding-right:8px">${d.b}</td><td style="color:${clr};text-align:right;padding-right:6px">${d.d}</td><td style="color:${clr}">${d.ok ? '✓' : '⚠'}</td></tr>`;
+      }).join('');
+
+      const PANEL_W = 420, PANEL_H = 210;
+      const combined = {
+        left:   Math.min(recA.left,   recB.left)   - 4,
+        top:    Math.min(recA.top,    recB.top)    - 4,
+        right:  Math.max(recA.right,  recB.right)  + 4,
+        bottom: Math.max(recA.bottom, recB.bottom) + 4,
+      };
+      const cands = [
+        { left: combined.right + 12,           top: Math.max(8, combined.top) },
+        { left: combined.left  - 12 - PANEL_W, top: Math.max(8, combined.top) },
+        { left: Math.max(8, combined.left),    top: combined.bottom + 12 },
+        { left: Math.max(8, combined.left),    top: combined.top - 12 - PANEL_H },
+      ];
+      let pos = null;
+      for (const c of cands) {
+        const p = { ...c, right: c.left + PANEL_W, bottom: c.top + PANEL_H };
+        if (p.left < 8 || p.right > vpW - 8 || p.top < 8 || p.bottom > vpH - 8) continue;
+        if (!(p.right < combined.left || p.left > combined.right || p.bottom < combined.top || p.top > combined.bottom)) { pos = c; break; }
+      }
+      if (!pos) pos = { left: vpW - PANEL_W - 8, top: vpH - PANEL_H - 8 };
+
+      const panel = document.createElement('div');
+      panel.className = '__vi_overlay';
+      panel.style.cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:10px 12px;border-radius:6px;border:1.5px solid #9b59b6;z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.8)`;
+      panel.innerHTML = `<div style="color:#9b59b6;font-weight:700;margin-bottom:5px">⟺ Comparación de alineación</div><div style="margin-bottom:6px;font-size:10px"><span style="color:#f1c40f">A: ${labelA}</span> &nbsp; <span style="color:#e74c3c">B: ${labelB}</span></div><table style="border-collapse:collapse;width:100%"><tr style="font-size:10px;color:#555"><td style="padding-right:8px"></td><td style="color:#f1c40f;text-align:right;padding-right:8px">A</td><td style="color:#e74c3c;text-align:right;padding-right:8px">B</td><td style="text-align:right;padding-right:6px">Δ</td><td></td></tr>${tableRows}</table><div style="margin-top:7px;border-top:1px solid #333;padding-top:5px;font-size:10px"><span style="color:#27ae60">✓ ${aligned} alineados</span>${misaligned > 0 ? ` &nbsp; <span style="color:#e74c3c">⚠ ${misaligned} desviados</span>` : ''}</div>`;
+      document.body.appendChild(panel);
+      window.__vi_drag(panel);
+
+      const badge = document.createElement('div');
+      badge.className = '__vi_badge';
+      badge.textContent = `${vpW} × ${vpH}`;
+      badge.style.cssText = 'position:fixed;bottom:8px;right:8px;background:rgba(0,0,0,.65);color:#fff;font-family:monospace;font-size:11px;padding:3px 8px;border-radius:3px;z-index:2147483647';
+      document.body.appendChild(badge);
+      window.__vi_drag(badge);
+
+      const s = document.querySelector('.__vi_status');
+      if (s) s.textContent = '⟺ Comparación — Ctrl+Shift+S para capturar | clic para nueva selección';
     };
 
     // ── keydown ────────────────────────────────────────────────────────────────
@@ -496,16 +592,23 @@ async function injectListeners(page, vp) {
       }
       e.preventDefault();
       e.stopPropagation();
-      // Limpiar selección anterior
-      document.querySelectorAll('[data-__vi]').forEach(prev => {
-        prev.style.outline = ''; prev.style.outlineOffset = ''; delete prev.dataset.__vi;
-      });
-      // Resaltar nuevo elemento
       const el = e.target;
-      el.style.outline      = '2px solid #f1c40f';
-      el.style.outlineOffset = '2px';
-      el.dataset.__vi        = '1';
-      window.__vi_showPanel(el);
+
+      if (e.shiftKey && window.__vi_el_A && window.__vi_el_A !== el) {
+        // Shift+clic: modo comparación con el elemento A ya seleccionado
+        window.__vi_showComparison(window.__vi_el_A, el);
+      } else {
+        // Clic normal: seleccionar nuevo elemento A
+        document.querySelectorAll('[data-__vi]').forEach(prev => {
+          prev.style.outline = ''; prev.style.outlineOffset = ''; delete prev.dataset.__vi;
+        });
+        document.querySelectorAll('.__vi_connector').forEach(c => c.remove());
+        el.style.outline       = '2px solid #f1c40f';
+        el.style.outlineOffset = '2px';
+        el.dataset.__vi        = '1';
+        window.__vi_el_A       = el;
+        window.__vi_showPanel(el);
+      }
     }, true);
 
   }, { vpW: vp.width, vpH: vp.height });
@@ -606,8 +709,9 @@ async function main() {
         // Finalizar sesión manual
         await page.evaluate(() => {
           window.__vi_mode = 'idle';
+          window.__vi_el_A = null;
           document.body.style.cursor = '';
-          document.querySelectorAll('.__vi_overlay, .__vi_badge').forEach(e => e.remove());
+          document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
           document.querySelectorAll('[data-__vi]').forEach(el => {
             el.style.outline = ''; el.style.outlineOffset = ''; delete el.dataset.__vi;
           });
@@ -638,7 +742,7 @@ async function main() {
       log(`  ✓ Captura manual ${manualIdx} guardada`);
       // Limpiar paneles, mantener modo manual
       await page.evaluate(() => {
-        document.querySelectorAll('.__vi_overlay, .__vi_badge').forEach(e => e.remove());
+        document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
         document.querySelectorAll('[data-__vi]').forEach(el => {
           el.style.outline = ''; el.style.outlineOffset = ''; delete el.dataset.__vi;
         });
