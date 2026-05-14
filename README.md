@@ -106,7 +106,7 @@ visual-inspector --url https://tu-sitio.com --width 1440 --height 768
 
 | Argumento  | Descripción                       | Default              |
 |-----------|-----------------------------------|----------------------|
-| `--url`   | URL inicial que abre el browser   | **requerido**        |
+| `--url`   | URL inicial que abre el browser   | repo de la herramienta |
 | `--width` | Ancho del viewport (px)           | 1440                 |
 | `--height`| Alto del viewport (px)            | 768                  |
 | `--out`   | Carpeta de salida                 | `evidencia/inspector`|

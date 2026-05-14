@@ -22,8 +22,7 @@ import { generateSessionReport, generateMasterReport } from './src/reports.js';
 function parseArgs() {
   const args = process.argv.slice(2);
   const get = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
-  const url = get('--url');
-  if (!url) { console.error('[INSPECTOR] Error: --url es requerido.'); process.exit(1); }
+  const url = get('--url') ?? 'https://github.com/Jomruizgo/playwright-visual-inspector-';
   return {
     url,
     width:  parseInt(get('--width')  ?? '1440', 10),
