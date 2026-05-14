@@ -4,47 +4,114 @@ Herramienta de inspección visual de páginas web basada en Playwright. Abre un 
 
 ## Requisitos
 
-- Node.js >= 18 (recomendado: usar [nvm](https://github.com/nvm-sh/nvm))
+- Node.js >= 18
 - pnpm >= 8
+
+---
 
 ## Instalación
 
+### Ubuntu / Linux
+
 ```bash
+# 1. Instalar Node.js con nvm (si no lo tienes)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.bashrc
+nvm install 20
+
+# 2. Instalar pnpm
+npm install -g pnpm
+
+# 3. Clonar e instalar
 git clone https://github.com/Jomruizgo/playwright-visual-inspector-.git
 cd playwright-visual-inspector-
 pnpm install
 pnpm exec playwright install chromium
+
+# 4. Comando global (opcional)
+echo '#!/bin/sh
+exec node '"$(pwd)"'/inspect-page.js "$@"' > ~/.local/bin/visual-inspector
+chmod +x ~/.local/bin/visual-inspector
+# Verificar que ~/.local/bin esté en PATH:
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
 ```
 
-### Comando global (opcional)
-
-Para ejecutarlo desde cualquier directorio crea un wrapper en `~/.local/bin`:
+### macOS
 
 ```bash
-cat > ~/.local/bin/visual-inspector << 'EOF'
-#!/bin/sh
-exec node /ruta/absoluta/playwright-visual-inspector-/inspect-page.js "$@"
-EOF
-chmod +x ~/.local/bin/visual-inspector
+# 1. Instalar Node.js con nvm (si no lo tienes)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.zshrc
+nvm install 20
+
+# 2. Instalar pnpm
+npm install -g pnpm
+
+# 3. Clonar e instalar
+git clone https://github.com/Jomruizgo/playwright-visual-inspector-.git
+cd playwright-visual-inspector-
+pnpm install
+pnpm exec playwright install chromium
+
+# 4. Comando global (opcional)
+echo '#!/bin/sh
+exec node '"$(pwd)"'/inspect-page.js "$@"' > /usr/local/bin/visual-inspector
+chmod +x /usr/local/bin/visual-inspector
 ```
 
-Asegúrate de que `~/.local/bin` esté en tu `PATH`.
+> Si `/usr/local/bin` requiere permisos, usa `sudo` o colócalo en `~/.local/bin` (mismos pasos que Linux).
+
+### Windows
+
+```powershell
+# 1. Instalar Node.js
+# Descarga el instalador desde https://nodejs.org (versión LTS)
+# Marca la opción "Add to PATH" durante la instalación.
+
+# 2. Instalar pnpm (en PowerShell como administrador)
+npm install -g pnpm
+
+# 3. Clonar e instalar
+git clone https://github.com/Jomruizgo/playwright-visual-inspector-.git
+cd playwright-visual-inspector-
+pnpm install
+pnpm exec playwright install chromium
+
+# 4. Comando global (opcional) — agrega un alias en tu perfil de PowerShell
+notepad $PROFILE   # si no existe, PowerShell te preguntará si deseas crearlo
+```
+
+Agrega esta línea al perfil de PowerShell que se abrió:
+
+```powershell
+function visual-inspector { node "C:\ruta\completa\playwright-visual-inspector-\inspect-page.js" @args }
+```
+
+Guarda, cierra y recarga con `. $PROFILE`.
+
+---
 
 ## Uso
 
 ```bash
+# Linux / macOS
 node inspect-page.js --url https://tu-sitio.com --width 1440 --height 768
 
-# O si instalaste el wrapper global:
+# Windows (PowerShell)
+node inspect-page.js --url https://tu-sitio.com --width 1440 --height 768
+
+# Con el comando global (cualquier OS)
 visual-inspector --url https://tu-sitio.com --width 1440 --height 768
 ```
 
-| Argumento  | Descripción                              | Default              |
-|-----------|------------------------------------------|----------------------|
-| `--url`   | URL inicial que abre el browser          | **requerido**        |
-| `--width` | Ancho del viewport (px)                  | 1440                 |
-| `--height`| Alto del viewport (px)                   | 768                  |
-| `--out`   | Carpeta de salida                        | `evidencia/inspector`|
+| Argumento  | Descripción                       | Default              |
+|-----------|-----------------------------------|----------------------|
+| `--url`   | URL inicial que abre el browser   | **requerido**        |
+| `--width` | Ancho del viewport (px)           | 1440                 |
+| `--height`| Alto del viewport (px)            | 768                  |
+| `--out`   | Carpeta de salida                 | `evidencia/inspector`|
+
+---
 
 ## Flujo de uso
 
@@ -63,6 +130,8 @@ Los atajos se activan directamente en el browser abierto, sin necesidad de volve
 | Ctrl+Shift+S   | Inspeccionar vista actual |
 | Ctrl+Shift+X   | Cerrar herramienta        |
 
+---
+
 ## Estructura de salida
 
 ```
@@ -79,6 +148,8 @@ evidencia/inspector/
 ```
 
 Abre `reporte-inspector.html` para navegar todas las sesiones.
+
+---
 
 ## Categorías que auto-descubre
 
@@ -97,6 +168,8 @@ Abre `reporte-inspector.html` para navegar todas las sesiones.
 | Badges/Estado  | rosa             |
 | Paginación     | violeta          |
 
+---
+
 ## Panel de propiedades capturadas
 
 Cada screenshot incluye un panel flotante con:
@@ -109,6 +182,8 @@ Cada screenshot incluye un panel flotante con:
 - Posición en el viewport (`x`, `y`)
 
 El panel se posiciona automáticamente para no tapar el outline del elemento inspeccionado.
+
+---
 
 ## Licencia
 
