@@ -1,0 +1,11 @@
+{
+  "name": "visual-inspector",
+  "version": "1.0.0",
+  "description": "Herramienta genérica de inspección visual de páginas web",
+  "type": "module",
+  "bin": { "visual-inspector": "./inspect-page.js" },
+  "dependencies": {
+    "@playwright/test": "^1.60.0"
+  },
+  "packageManager": "pnpm@11.1.1"
+}
