@@ -117,23 +117,48 @@ visual-inspector --url https://tu-sitio.com --width 1440 --height 768
 
 1. El browser abre en la URL indicada.
 2. Navega hasta la vista que quieres documentar.
-3. Presiona **Ctrl+Shift+S** → la herramienta recorre todos los elementos visibles y captura screenshots con el panel de estilos.
-4. Navega a otra vista y repite el paso 3 las veces que necesites.
+3. Elige uno de los tres modos de captura (ver abajo) y usa `Ctrl+Shift+S` para disparar.
+4. Navega a otra vista y repite las veces que necesites.
 5. Presiona **Ctrl+Shift+X** → el browser se cierra y se genera el reporte HTML.
 
-## Triggers de teclado
+## Modos de captura y atajos de teclado
 
-Los atajos se activan directamente en el browser abierto, sin necesidad de volver a la terminal.
+Los atajos se activan directamente en el browser, sin necesidad de volver a la terminal.
 
-| Teclas         | Modo idle                  | Modo manual                      |
-|----------------|----------------------------|----------------------------------|
-| Ctrl+Shift+S   | Auto-scan de la vista      | Capturar elemento seleccionado   |
-| Ctrl+Shift+M   | Activar modo manual        | Desactivar modo manual           |
-| Ctrl+Shift+X   | Cerrar herramienta         | Cerrar herramienta               |
+### Resumen de atajos
 
-### Modo manual
+| Teclas | Descripción |
+|--------|-------------|
+| **Ctrl+Shift+S** | Auto-scan completo / Escanear cola / Capturar en modo manual |
+| **Ctrl+Shift+M** | Activar / desactivar modo manual |
+| **Ctrl+Shift+Q** | Activar / desactivar modo cola de selección |
+| **Ctrl+Shift+X** | Cerrar herramienta |
+| **Shift+Clic** *(en modo manual)* | Comparar alineación entre dos elementos |
+| **Alt+Clic** *(en modo cola)* | Añadir o quitar elemento de la cola |
 
-`Ctrl+Shift+M` activa un modo en el que puedes hacer clic sobre cualquier elemento de la página para ver su panel de estilos. Los paneles son arrastrables — los puedes reposicionar antes de tomar el screenshot con `Ctrl+Shift+S`. Las capturas manuales van al mismo reporte.
+---
+
+### Modo auto-scan (`Ctrl+Shift+S`)
+
+Descubre automáticamente todos los elementos visibles de la página por categoría semántica y captura un screenshot con el panel de estilos para cada uno.
+
+### Modo manual (`Ctrl+Shift+M`)
+
+Activa un cursor en forma de cruz. Haz clic sobre cualquier elemento para ver su panel de estilos. Los paneles son **arrastrables** — los puedes reposicionar antes de tomar el screenshot con `Ctrl+Shift+S`.
+
+- **Shift+Clic** sobre un segundo elemento → modo comparación: muestra los deltas de `left`, `top`, `right`, `bottom`, `width` y `height` entre los dos elementos, con ✓ / ⚠ por cada propiedad.
+
+### Modo cola de selección (`Ctrl+Shift+Q`)
+
+Permite elegir exactamente qué elementos escanear antes de ejecutar el scan.
+
+1. `Ctrl+Shift+Q` → cursor cambia a `cell`, badge muestra `⬡ Cola`
+2. **Alt+Clic** en cada elemento que quieres capturar → se resalta en morado con un número de orden
+3. **Alt+Clic** sobre un elemento ya en cola → lo quita y renumera los restantes
+4. `Ctrl+Shift+S` → escanea solo los elementos en cola, en el orden seleccionado
+5. `Ctrl+Shift+Q` → cancela y limpia la cola sin escanear
+
+> **Nota en Linux:** `Alt+Clic` puede ser capturado por el gestor de ventanas para mover ventanas. Si esto ocurre, deshabilítalo en la configuración del escritorio (en GNOME: *Configuración → Accesibilidad → Interacción* o `dconf-editor` → `/org/gnome/desktop/wm/preferences/mouse-button-modifier`).
 
 ---
 
@@ -141,15 +166,19 @@ Los atajos se activan directamente en el browser abierto, sin necesidad de volve
 
 ```
 evidencia/inspector/
-├── sesion-001-<timestamp>/
+├── sesion-001-<timestamp>/              ← auto-scan
 │   ├── 00-vista-completa.png
 │   ├── 01-Titulos-0.png
-│   ├── 02-Parrafos-0.png
-│   ├── 03-Cab_tabla-0.png
+│   ├── 02-Cab_tabla-0.png
 │   └── index.html
-├── sesion-002-<timestamp>/
-│   └── ...
-└── reporte-inspector.html
+├── sesion-002-<timestamp>-cola/        ← cola de selección
+│   ├── 00-vista-completa.png
+│   ├── 01-Seleccion-0.png
+│   └── index.html
+├── sesion-003-<timestamp>-manual/      ← capturas manuales
+│   ├── manual-01.png
+│   └── index.html
+└── reporte-inspector.html              ← índice de todas las sesiones
 ```
 
 Abre `reporte-inspector.html` para navegar todas las sesiones.
@@ -158,20 +187,23 @@ Abre `reporte-inspector.html` para navegar todas las sesiones.
 
 ## Categorías que auto-descubre
 
-| Categoría       | Color de outline |
-|----------------|-----------------|
-| Logo / Marca   | naranja          |
-| Header         | rojo             |
-| Navegación     | naranja oscuro   |
-| Títulos        | azul             |
-| Párrafos       | morado           |
-| Inputs         | verde agua       |
-| Botones        | amarillo         |
-| Links          | azul claro       |
-| Cabeceras tabla| azul oscuro      |
-| Celdas datos   | verde            |
-| Badges/Estado  | rosa             |
-| Paginación     | violeta          |
+| Categoría        | Color de outline |
+|-----------------|-----------------|
+| Logo / Marca    | naranja          |
+| Header          | rojo             |
+| Perfil usuario  | rosa claro       |
+| Navegación      | naranja oscuro   |
+| Títulos         | azul             |
+| Párrafos        | morado           |
+| Inputs          | verde agua       |
+| Botones         | amarillo         |
+| Links           | azul claro       |
+| Cabeceras tabla | azul oscuro      |
+| Celdas datos    | verde            |
+| Badges/Estado   | rosa             |
+| Paginación      | violeta          |
+| Scroll horiz.   | gris             |
+| Cola (manual)   | morado claro     |
 
 ---
 
