@@ -100,6 +100,7 @@ export async function captureElement(page, el, vp, sessionDir, idx) {
 
   const ok = await page.evaluate(({ discIdx, color, classList, vpW, vpH }) => {
     document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
+    document.querySelectorAll('[data-__vi-disc]').forEach(e => { e.style.outline = ''; e.style.outlineOffset = ''; });
 
     const el = document.querySelector(`[data-__vi-disc="${discIdx}"]`);
     if (!el) return false;
