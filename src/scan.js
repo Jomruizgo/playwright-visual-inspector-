@@ -43,6 +43,7 @@ export async function discoverElements(page) {
 
       for (const el of nodes) {
         if (seen.has(el)) continue;
+        if (el.closest('.__vi_status, .__vi_overlay, .__vi_badge, .__vi_connector, .__vi_queue_badge')) continue;
 
         const r = el.getBoundingClientRect();
         const cs = window.getComputedStyle(el);
