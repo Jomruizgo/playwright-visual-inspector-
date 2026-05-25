@@ -57,9 +57,20 @@ export async function injectListeners(page, vp) {
         }
         const side = window.__vi_settings.dockSide || 'right';
         const width = window.__vi_settings.dockWidth || 280;
-        
+        const totalW = vpW + width;
+
+        // html cubre el viewport completo; body recibe el margen lateral para
+        // desplazarse sin que se apilen los márgenes (html + body juntos los
+        // duplicarían y sacarían el contenido de pantalla).
         style.innerHTML = `
-          html, body {
+          html {
+            width: ${totalW}px !important;
+            max-width: ${totalW}px !important;
+            min-width: ${totalW}px !important;
+            margin: 0 !important;
+            overflow-x: hidden !important;
+          }
+          body {
             width: ${vpW}px !important;
             max-width: ${vpW}px !important;
             min-width: ${vpW}px !important;
