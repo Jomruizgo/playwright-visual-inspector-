@@ -209,7 +209,16 @@ Abre `reporte-inspector.html` para navegar todas las sesiones.
 
 ## Panel de propiedades capturadas
 
-Cada screenshot incluye un panel flotante con:
+El encabezado del panel siempre tiene la forma:
+
+```
+▶ tagname [#rrggbb]
+```
+
+- **`tagname`** — tag HTML del elemento inspeccionado (p. ej. `header`, `button`, `h1`).
+- **`#rrggbb`** — color de la categoría semántica a la que pertenece. Es el mismo color que se usa para el outline del elemento y el borde del panel, lo que permite identificar de un vistazo a qué grupo pertenece cada captura.
+
+Cada screenshot incluye además un panel con las propiedades computadas:
 
 - Tag y clases del elemento
 - Contenido de texto (primeros 60 caracteres)
