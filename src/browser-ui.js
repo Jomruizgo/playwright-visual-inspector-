@@ -7,6 +7,419 @@ export async function injectListeners(page, vp) {
     window.__vi_queue = [];
     window.__vi_q_counter = 0;
 
+    // ── Cargar y fusionar configuraciones ──────────────────────────────────────
+    const DEFAULT_SETTINGS = {
+      colorFormat: 'hex',
+      highlightColorSource: 'category',
+      customHighlightColor: '#e74c3c',
+      highlightThickness: 2,
+      visibleProperties: {
+        'element': true,
+        'content': true,
+        'font-family': true,
+        'font-size': true,
+        'font-weight': true,
+        'color': true,
+        'background': true,
+        'text-align': true,
+        'width': true,
+        'height': true,
+        'padding': true,
+        'margin': true,
+        'border': true,
+        'overflow-x': false,
+        'text-overflow': false,
+        'white-space': false,
+        'pos x': true,
+        'pos y': true
+      },
+      responsiveDock: true,
+      dockSide: 'right',
+      dockWidth: 280
+    };
+    
+    const savedSettings = localStorage.getItem('__vi_settings');
+    window.__vi_settings = savedSettings 
+      ? { ...DEFAULT_SETTINGS, ...window.__vi_settings, ...JSON.parse(savedSettings) } 
+      : { ...DEFAULT_SETTINGS, ...window.__vi_settings };
+
+    // ── Utilidad: rgbToHex ──────────────────────────────────────────────────────
+    window.__vi_rgbToHex = function(rgbStr) {
+      if (!rgbStr || rgbStr === 'rgba(0, 0, 0, 0)' || rgbStr === 'transparent') return 'transparent';
+      const match = rgbStr.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)$/);
+      if (!match) return rgbStr;
+      
+      const r = parseInt(match[1], 10);
+      const g = parseInt(match[2], 10);
+      const b = parseInt(match[3], 10);
+      const a = match[4] !== undefined ? parseFloat(match[4]) : 1;
+      
+      const hex = (x) => x.toString(16).padStart(2, '0');
+      
+      if (a < 1) {
+        const alphaHex = Math.round(a * 255).toString(16).padStart(2, '0');
+        return `#${hex(r)}${hex(g)}${hex(b)}${alphaHex}`.toUpperCase();
+      }
+      return `#${hex(r)}${hex(g)}${hex(b)}`.toUpperCase();
+    };
+
+    // ── Inyectar Estilos del Configurador ─────────────────────────────────────
+    if (!document.getElementById('__vi_settings_styles')) {
+      const style = document.createElement('style');
+      style.id = '__vi_settings_styles';
+      style.innerHTML = `
+        .__vi_btn_settings {
+          position: fixed;
+          top: 8px;
+          left: 8px;
+          background: #1e1e1ecc;
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          color: #f1c40f;
+          border: 1.5px solid #f1c40f;
+          padding: 6px 12px;
+          border-radius: 6px;
+          z-index: 2147483647;
+          cursor: pointer;
+          font-family: system-ui, -apple-system, sans-serif;
+          font-size: 11px;
+          font-weight: 600;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          user-select: none;
+        }
+        .__vi_btn_settings:hover {
+          background: #f1c40f;
+          color: #1e1e1e;
+          box-shadow: 0 4px 20px rgba(241, 196, 15, 0.4);
+          transform: translateY(-1px);
+        }
+        .__vi_btn_settings:active {
+          transform: translateY(0);
+        }
+        
+        .__vi_settings_panel {
+          position: fixed;
+          top: 45px;
+          left: 8px;
+          width: 320px;
+          max-height: 80vh;
+          background: rgba(30, 30, 30, 0.95);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          color: #e0e0e0;
+          border: 1.5px solid #f1c40f;
+          border-radius: 10px;
+          padding: 14px;
+          z-index: 2147483647;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+          display: none;
+          flex-direction: column;
+          gap: 12px;
+          overflow-y: auto;
+          box-sizing: border-box;
+          font-family: system-ui, -apple-system, sans-serif;
+          font-size: 12px;
+        }
+        
+        .__vi_settings_section {
+          border-bottom: 1px solid #333;
+          padding-bottom: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .__vi_settings_section:last-child {
+          border-bottom: none;
+          padding-bottom: 0;
+        }
+        
+        .__vi_settings_title {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          color: #888;
+          font-weight: 700;
+          margin-bottom: 4px;
+        }
+        
+        .__vi_row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .__vi_radio_group {
+          display: flex;
+          background: #2a2a2a;
+          border-radius: 6px;
+          padding: 2px;
+          border: 1px solid #444;
+        }
+        .__vi_radio_btn {
+          padding: 4px 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          font-weight: 600;
+          font-size: 11px;
+          user-select: none;
+        }
+        .__vi_radio_btn.active {
+          background: #f1c40f;
+          color: #1e1e1e;
+        }
+        
+        .__vi_checkbox_grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 6px;
+          max-height: 180px;
+          overflow-y: auto;
+          padding: 4px;
+          background: #252525;
+          border-radius: 6px;
+          border: 1px solid #333;
+        }
+        
+        .__vi_checkbox_label {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          cursor: pointer;
+          font-family: monospace;
+          font-size: 11px;
+          user-select: none;
+        }
+        .__vi_checkbox_label input {
+          cursor: pointer;
+          accent-color: #f1c40f;
+        }
+        
+        .__vi_input_range {
+          flex-grow: 1;
+          accent-color: #f1c40f;
+          cursor: pointer;
+        }
+        
+        .__vi_color_picker_wrap {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .__vi_color_input {
+          border: none;
+          background: none;
+          width: 32px;
+          height: 24px;
+          cursor: pointer;
+          padding: 0;
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    // ── Inyectar Botón y Panel de Ajustes ────────────────────────────────────
+    if (!document.querySelector('.__vi_btn_settings')) {
+      const settings = window.__vi_settings;
+
+      const btn = document.createElement('div');
+      btn.className = '__vi_btn_settings';
+      btn.innerHTML = `<span>⚙</span><span>Ajustes</span>`;
+      document.body.appendChild(btn);
+
+      const panel = document.createElement('div');
+      panel.className = '__vi_settings_panel';
+      
+      panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #444;padding-bottom:8px;margin-bottom:6px;">
+          <span style="color:#f1c40f;font-weight:700;font-size:13px;letter-spacing:0.5px;">⚙ CONFIGURACIÓN</span>
+          <span id="__vi_close_settings" style="cursor:pointer;font-size:16px;color:#888;font-weight:bold;">&times;</span>
+        </div>
+        
+        <!-- Formato de Color -->
+        <div class="__vi_settings_section">
+          <div class="__vi_settings_title">Formato de Color</div>
+          <div class="__vi_row">
+            <span>Mostrar colores en:</span>
+            <div class="__vi_radio_group" id="__vi_opt_color_format">
+              <div class="__vi_radio_btn ${settings.colorFormat === 'hex' ? 'active' : ''}" data-value="hex">Hex</div>
+              <div class="__vi_radio_btn ${settings.colorFormat === 'rgb' ? 'active' : ''}" data-value="rgb">RGB</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Recuadro (Highlight) -->
+        <div class="__vi_settings_section">
+          <div class="__vi_settings_title">Recuadro del Elemento</div>
+          <div class="__vi_row">
+            <span>Espesor de línea:</span>
+            <span id="__vi_thickness_val" style="font-weight:bold;color:#f1c40f;">${settings.highlightThickness}px</span>
+          </div>
+          <div class="__vi_row">
+            <input type="range" class="__vi_input_range" id="__vi_opt_thickness" min="1" max="8" value="${settings.highlightThickness}">
+          </div>
+          
+          <div class="__vi_row" style="margin-top:4px;">
+            <span>Color de recuadro:</span>
+            <div class="__vi_radio_group" id="__vi_opt_color_source">
+              <div class="__vi_radio_btn ${settings.highlightColorSource === 'category' ? 'active' : ''}" data-value="category">Categoría</div>
+              <div class="__vi_radio_btn ${settings.highlightColorSource === 'custom' ? 'active' : ''}" data-value="custom">Personalizado</div>
+            </div>
+          </div>
+          
+          <div class="__vi_row" id="__vi_custom_color_row" style="display: ${settings.highlightColorSource === 'custom' ? 'flex' : 'none'};">
+            <span>Color personalizado:</span>
+            <div class="__vi_color_picker_wrap">
+              <input type="color" class="__vi_color_input" id="__vi_opt_custom_color" value="${settings.customHighlightColor}">
+              <span id="__vi_custom_color_text" style="font-family:monospace;font-size:11px;">${settings.customHighlightColor}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Propiedades Visibles -->
+        <div class="__vi_settings_section">
+          <div class="__vi_settings_title">Propiedades a Mostrar</div>
+          <div class="__vi_checkbox_grid" id="__vi_opt_properties">
+            ${Object.keys(settings.visibleProperties).map(prop => `
+              <label class="__vi_checkbox_label">
+                <input type="checkbox" data-prop="${prop}" ${settings.visibleProperties[prop] ? 'checked' : ''}>
+                <span>${prop}</span>
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Acoplamiento Responsivo -->
+        <div class="__vi_settings_section">
+          <div class="__vi_settings_title">Diseño Responsivo (Celular/Tablet)</div>
+          <div class="__vi_row">
+            <span>Fijar lateral en pantallas &le; 900px:</span>
+            <input type="checkbox" id="__vi_opt_responsive_dock" ${settings.responsiveDock ? 'checked' : ''} style="accent-color:#f1c40f;cursor:pointer;">
+          </div>
+          
+          <div id="__vi_dock_options" style="display: ${settings.responsiveDock ? 'block' : 'none'}; margin-top: 4px;">
+            <div class="__vi_row" style="margin-bottom: 6px;">
+              <span>Lado del panel:</span>
+              <div class="__vi_radio_group" id="__vi_opt_dock_side">
+                <div class="__vi_radio_btn ${settings.dockSide === 'right' ? 'active' : ''}" data-value="right">Derecha</div>
+                <div class="__vi_radio_btn ${settings.dockSide === 'left' ? 'active' : ''}" data-value="left">Izquierda</div>
+              </div>
+            </div>
+            <div class="__vi_row">
+              <span>Ancho de barra:</span>
+              <span id="__vi_dock_width_val" style="font-weight:bold;color:#f1c40f;">${settings.dockWidth}px</span>
+            </div>
+            <div class="__vi_row">
+              <input type="range" class="__vi_input_range" id="__vi_opt_dock_width" min="200" max="450" value="${settings.dockWidth}">
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(panel);
+
+      const saveSettings = () => {
+        localStorage.setItem('__vi_settings', JSON.stringify(window.__vi_settings));
+        if (window.__vi_saveSettingsNode) {
+          window.__vi_saveSettingsNode(window.__vi_settings);
+        }
+        if (window.__vi_el_A && window.__vi_mode === 'manual') {
+          const thickness = window.__vi_settings.highlightThickness || 2;
+          const color = window.__vi_settings.highlightColorSource === 'custom' 
+            ? window.__vi_settings.customHighlightColor 
+            : '#f1c40f';
+          window.__vi_el_A.style.outline = `${thickness}px solid ${color}`;
+          window.__vi_showPanel(window.__vi_el_A);
+        }
+      };
+
+      btn.addEventListener('click', () => {
+        const isVisible = panel.style.display === 'flex';
+        panel.style.display = isVisible ? 'none' : 'flex';
+      });
+      panel.querySelector('#__vi_close_settings').addEventListener('click', () => {
+        panel.style.display = 'none';
+      });
+
+      panel.querySelectorAll('#__vi_opt_color_format .__vi_radio_btn').forEach(b => {
+        b.addEventListener('click', () => {
+          panel.querySelectorAll('#__vi_opt_color_format .__vi_radio_btn').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          window.__vi_settings.colorFormat = b.dataset.value;
+          saveSettings();
+        });
+      });
+
+      const thicknessInput = panel.querySelector('#__vi_opt_thickness');
+      const thicknessVal = panel.querySelector('#__vi_thickness_val');
+      thicknessInput.addEventListener('input', () => {
+        thicknessVal.textContent = `${thicknessInput.value}px`;
+        window.__vi_settings.highlightThickness = parseInt(thicknessInput.value, 10);
+        saveSettings();
+      });
+
+      const customColorRow = panel.querySelector('#__vi_custom_color_row');
+      panel.querySelectorAll('#__vi_opt_color_source .__vi_radio_btn').forEach(b => {
+        b.addEventListener('click', () => {
+          panel.querySelectorAll('#__vi_opt_color_source .__vi_radio_btn').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          window.__vi_settings.highlightColorSource = b.dataset.value;
+          customColorRow.style.display = b.dataset.value === 'custom' ? 'flex' : 'none';
+          saveSettings();
+        });
+      });
+
+      const colorPicker = panel.querySelector('#__vi_opt_custom_color');
+      const colorText = panel.querySelector('#__vi_custom_color_text');
+      colorPicker.addEventListener('input', () => {
+        colorText.textContent = colorPicker.value.toUpperCase();
+        window.__vi_settings.customHighlightColor = colorPicker.value;
+        saveSettings();
+      });
+
+      panel.querySelectorAll('#__vi_opt_properties input').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const prop = cb.dataset.prop;
+          window.__vi_settings.visibleProperties[prop] = cb.checked;
+          saveSettings();
+        });
+      });
+
+      const responsiveDockCheckbox = panel.querySelector('#__vi_opt_responsive_dock');
+      const dockOptionsDiv = panel.querySelector('#__vi_dock_options');
+      responsiveDockCheckbox.addEventListener('change', () => {
+        window.__vi_settings.responsiveDock = responsiveDockCheckbox.checked;
+        dockOptionsDiv.style.display = responsiveDockCheckbox.checked ? 'block' : 'none';
+        saveSettings();
+      });
+
+      panel.querySelectorAll('#__vi_opt_dock_side .__vi_radio_btn').forEach(b => {
+        b.addEventListener('click', () => {
+          panel.querySelectorAll('#__vi_opt_dock_side .__vi_radio_btn').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          window.__vi_settings.dockSide = b.dataset.value;
+          saveSettings();
+        });
+      });
+
+      const dockWidthInput = panel.querySelector('#__vi_opt_dock_width');
+      const dockWidthVal = panel.querySelector('#__vi_dock_width_val');
+      dockWidthInput.addEventListener('input', () => {
+        dockWidthVal.textContent = `${dockWidthInput.value}px`;
+        window.__vi_settings.dockWidth = parseInt(dockWidthInput.value, 10);
+        saveSettings();
+      });
+
+      if (!sessionStorage.getItem('__vi_settings_shown')) {
+        panel.style.display = 'flex';
+        sessionStorage.setItem('__vi_settings_shown', 'true');
+      }
+    }
+
     window.__vi_clearQueue = function() {
       window.__vi_queue.forEach(item => {
         item.el.style.outline = ''; item.el.style.outlineOffset = '';
@@ -41,48 +454,86 @@ export async function injectListeners(page, vp) {
       const rec = el.getBoundingClientRect();
       const cls = [...el.classList].slice(0, 3).join('.');
 
-      const rows = [
-        ['element',       el.tagName.toLowerCase() + (cls ? '.' + cls : '')],
-        ['content',       el.textContent.trim().substring(0, 60) || '—'],
-        ['───────────', ''],
-        ['font-family',   cs.fontFamily],
-        ['font-size',     cs.fontSize],
-        ['font-weight',   cs.fontWeight],
-        ['color',         cs.color],
-        ['background',    cs.backgroundColor],
-        ['text-align',    cs.textAlign],
-        ['───────────', ''],
-        ['width',         Math.round(rec.width)  + 'px'],
-        ['height',        Math.round(rec.height) + 'px'],
-        ['padding',       cs.padding],
-        ['margin',        cs.margin],
-        ['border',        cs.border],
-        ['overflow-x',    cs.overflowX],
-        ['text-overflow', cs.textOverflow],
-        ['white-space',   cs.whiteSpace],
-        ['───────────', ''],
-        ['pos x',         Math.round(rec.left) + 'px'],
-        ['pos y',         Math.round(rec.top)  + 'px'],
-      ];
+      // Filtrar y dar formato a las propiedades
+      const rows = [];
+      const showProp = (k) => window.__vi_settings.visibleProperties[k];
+      const formatColor = (c) => window.__vi_settings.colorFormat === 'hex' ? window.__vi_rgbToHex(c) : c;
 
-      const PANEL_W = 480, PANEL_H = rows.length * 18 + 28;
-      const OUTLINE = 4, GAP = 12;
-      const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
-      const cands = [
-        { left: exp.right + GAP,          top: Math.max(8, exp.top) },
-        { left: exp.left - GAP - PANEL_W, top: Math.max(8, exp.top) },
-        { left: Math.max(8, exp.left),    top: exp.bottom + GAP },
-        { left: Math.max(8, exp.left),    top: exp.top - GAP - PANEL_H },
-      ];
-      let pos = null;
-      for (const c of cands) {
-        const p = { ...c, right: c.left + PANEL_W, bottom: c.top + PANEL_H };
-        if (p.left < 8 || p.right > vpW - 8 || p.top < 8 || p.bottom > vpH - 8) continue;
-        if (!(p.right < exp.left || p.left > exp.right || p.bottom < exp.top || p.top > exp.bottom)) { pos = c; break; }
+      // Secciones dinámicas
+      let s1 = [];
+      if (showProp('element')) s1.push(['element', el.tagName.toLowerCase() + (cls ? '.' + cls : '')]);
+      if (showProp('content')) s1.push(['content', el.textContent.trim().substring(0, 60) || '—']);
+      if (s1.length) rows.push(...s1);
+
+      let s2 = [];
+      if (showProp('font-family')) s2.push(['font-family', cs.fontFamily]);
+      if (showProp('font-size')) s2.push(['font-size', cs.fontSize]);
+      if (showProp('font-weight')) s2.push(['font-weight', cs.fontWeight]);
+      if (showProp('color')) s2.push(['color', formatColor(cs.color)]);
+      if (showProp('background')) s2.push(['background', formatColor(cs.backgroundColor)]);
+      if (showProp('text-align')) s2.push(['text-align', cs.textAlign]);
+      if (s2.length) {
+        if (rows.length) rows.push(['───────────', '']);
+        rows.push(...s2);
       }
-      if (!pos) {
-        const cx = (exp.left + exp.right) / 2, cy = (exp.top + exp.bottom) / 2;
-        pos = { left: cx < vpW / 2 ? vpW - PANEL_W - 8 : 8, top: cy < vpH / 2 ? vpH - PANEL_H - 8 : 8 };
+
+      let s3 = [];
+      if (showProp('width')) s3.push(['width', Math.round(rec.width) + 'px']);
+      if (showProp('height')) s3.push(['height', Math.round(rec.height) + 'px']);
+      if (showProp('padding')) s3.push(['padding', cs.padding]);
+      if (showProp('margin')) s3.push(['margin', cs.margin]);
+      if (showProp('border')) s3.push(['border', cs.border]);
+      if (showProp('overflow-x')) s3.push(['overflow-x', cs.overflowX]);
+      if (showProp('text-overflow')) s3.push(['text-overflow', cs.textOverflow]);
+      if (showProp('white-space')) s3.push(['white-space', cs.whiteSpace]);
+      if (s3.length) {
+        if (rows.length) rows.push(['───────────', '']);
+        rows.push(...s3);
+      }
+
+      let s4 = [];
+      if (showProp('pos x')) s4.push(['pos x', Math.round(rec.left) + 'px']);
+      if (showProp('pos y')) s4.push(['pos y', Math.round(rec.top) + 'px']);
+      if (s4.length) {
+        if (rows.length) rows.push(['───────────', '']);
+        rows.push(...s4);
+      }
+
+      const panelColor = window.__vi_settings.highlightColorSource === 'custom' 
+        ? window.__vi_settings.customHighlightColor 
+        : '#f1c40f';
+
+      // Determinar si se acopla a un lado en base al diseño responsivo (ancho <= 900)
+      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 900);
+
+      const PANEL_W = isDocked ? (window.__vi_settings.dockWidth || 280) : 480;
+      const PANEL_H = rows.length * 18 + 28;
+
+      let cssText = '';
+      if (isDocked) {
+        const side = window.__vi_settings.dockSide || 'right';
+        const borderStyle = side === 'right' ? `border-left:2.5px solid ${panelColor}` : `border-right:2.5px solid ${panelColor}`;
+        cssText = `position:fixed;${side}:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);white-space:pre;overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;${borderStyle}`;
+      } else {
+        const OUTLINE = 4, GAP = 12;
+        const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
+        const cands = [
+          { left: exp.right + GAP,          top: Math.max(8, exp.top) },
+          { left: exp.left - GAP - PANEL_W, top: Math.max(8, exp.top) },
+          { left: Math.max(8, exp.left),    top: exp.bottom + GAP },
+          { left: Math.max(8, exp.left),    top: exp.top - GAP - PANEL_H },
+        ];
+        let pos = null;
+        for (const c of cands) {
+          const p = { ...c, right: c.left + PANEL_W, bottom: c.top + PANEL_H };
+          if (p.left < 8 || p.right > vpW - 8 || p.top < 8 || p.bottom > vpH - 8) continue;
+          if (!(p.right < exp.left || p.left > exp.right || p.bottom < exp.top || p.top > exp.bottom)) { pos = c; break; }
+        }
+        if (!pos) {
+          const cx = (exp.left + exp.right) / 2, cy = (exp.top + exp.bottom) / 2;
+          pos = { left: cx < vpW / 2 ? vpW - PANEL_W - 8 : 8, top: cy < vpH / 2 ? vpH - PANEL_H - 8 : 8 };
+        }
+        cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:8px 10px 10px;border-radius:6px;border:1.5px solid ${panelColor};z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.7);white-space:pre`;
       }
 
       const KEY_W = 14;
@@ -93,10 +544,14 @@ export async function injectListeners(page, vp) {
 
       const panel = document.createElement('div');
       panel.className = '__vi_overlay';
-      panel.style.cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:8px 10px 10px;border-radius:6px;border:1.5px solid #f1c40f;z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.7);white-space:pre`;
-      panel.innerHTML = `<div style="color:#f1c40f;font-weight:700;margin-bottom:4px">✦ ${el.tagName.toLowerCase()}</div>` + lines.join('\n');
+      panel.style.cssText = cssText;
+      panel.innerHTML = `<div style="color:${panelColor};font-weight:700;margin-bottom:4px">✦ ${el.tagName.toLowerCase()}</div>` + lines.join('\n');
       document.body.appendChild(panel);
-      window.__vi_drag(panel);
+      
+      // Solo habilitar arrastrado si no está acoplado lateralmente
+      if (!isDocked) {
+        window.__vi_drag(panel);
+      }
 
       const badge = document.createElement('div');
       badge.className = '__vi_badge';
@@ -230,12 +685,23 @@ export async function injectListeners(page, vp) {
       let node = e.target;
       while (node) {
         const cls = typeof node.className === 'string' ? node.className : '';
-        if (cls.includes('__vi_overlay') || cls.includes('__vi_badge') || cls.includes('__vi_status')) return;
+        if (
+          cls.includes('__vi_overlay') || 
+          cls.includes('__vi_badge') || 
+          cls.includes('__vi_status') ||
+          cls.includes('__vi_btn_settings') ||
+          cls.includes('__vi_settings_panel')
+        ) return;
         node = node.parentElement;
       }
       e.preventDefault();
       e.stopPropagation();
       const el = e.target;
+
+      const thickness = window.__vi_settings.highlightThickness || 2;
+      const color = window.__vi_settings.highlightColorSource === 'custom' 
+        ? window.__vi_settings.customHighlightColor 
+        : '#f1c40f';
 
       if (e.shiftKey && window.__vi_el_A && window.__vi_el_A !== el) {
         window.__vi_showComparison(window.__vi_el_A, el);
@@ -244,7 +710,7 @@ export async function injectListeners(page, vp) {
           prev.style.outline = ''; prev.style.outlineOffset = ''; delete prev.dataset.__vi;
         });
         document.querySelectorAll('.__vi_connector').forEach(c => c.remove());
-        el.style.outline       = '2px solid #f1c40f';
+        el.style.outline       = `${thickness}px solid ${color}`;
         el.style.outlineOffset = '2px';
         el.dataset.__vi        = '1';
         window.__vi_el_A       = el;

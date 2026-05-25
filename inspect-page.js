@@ -42,8 +42,68 @@ async function main() {
   log(`Viewport: ${width} × ${height} | Salida: ${out}`);
   log('');
 
+  const settingsFile = path.join(process.cwd(), 'visual-inspector-settings.json');
+  const DEFAULT_SETTINGS = {
+    colorFormat: 'hex',
+    highlightColorSource: 'category',
+    customHighlightColor: '#e74c3c',
+    highlightThickness: 2,
+    visibleProperties: {
+      'element': true,
+      'content': true,
+      'font-family': true,
+      'font-size': true,
+      'font-weight': true,
+      'color': true,
+      'background': true,
+      'text-align': true,
+      'width': true,
+      'height': true,
+      'padding': true,
+      'margin': true,
+      'border': true,
+      'overflow-x': false,
+      'text-overflow': false,
+      'white-space': false,
+      'pos x': true,
+      'pos y': true
+    },
+    responsiveDock: true,
+    dockSide: 'right',
+    dockWidth: 280
+  };
+
+  let settings = { ...DEFAULT_SETTINGS };
+  if (fs.existsSync(settingsFile)) {
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsFile, 'utf8'));
+      // Asegurar que estén todas las propiedades nuevas si las hubiera
+      settings = { ...DEFAULT_SETTINGS, ...settings };
+    } catch (err) {
+      log(`Error leyendo configuración: ${err.message}`);
+    }
+  } else {
+    fs.writeFileSync(settingsFile, JSON.stringify(DEFAULT_SETTINGS, null, 2), 'utf8');
+  }
+
   const browser = await chromium.launch({ headless: false, slowMo: 50 });
   const ctx     = await browser.newContext({ viewport: vp });
+
+  // Exponer función para guardar configuraciones desde el navegador
+  await ctx.exposeFunction('__vi_saveSettingsNode', (newSettings) => {
+    settings = { ...settings, ...newSettings };
+    try {
+      fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf8');
+    } catch (err) {
+      log(`Error guardando configuración: ${err.message}`);
+    }
+  });
+
+  // Inyectar configuraciones iniciales
+  await ctx.addInitScript((s) => {
+    window.__vi_settings = s;
+  }, settings);
+
   const page    = await ctx.newPage();
 
   await page.goto(url, { waitUntil: 'load', timeout: 60000 });

@@ -222,6 +222,30 @@ El panel se posiciona automáticamente para no tapar el outline del elemento ins
 
 ---
 
+## Configuración y Personalización
+
+La herramienta cuenta con un **Panel Flotante de Ajustes** (accesible haciendo clic en el botón **⚙ Ajustes** en la esquina superior izquierda) que se abre automáticamente en la primera carga de la página.
+
+Este panel te permite configurar los siguientes aspectos:
+
+1. **Formato de Color**:
+   - Cambia la visualización de los valores de color de texto y fondo en el panel de propiedades entre **Hexadecimal** (por defecto) y **RGB**.
+2. **Estilo del Recuadro de Selección**:
+   - **Grosor**: Ajusta el espesor de la línea del contorno (de `1px` a `8px`) mediante un slider interactivo.
+   - **Color**: Alterna entre el color asignado a la **Categoría Semántica** (por defecto) o un **Color Personalizado** único usando un selector de color integrado.
+3. **Propiedades Visibles**:
+   - Selecciona individualmente mediante checkboxes cuáles de las 18 propiedades computadas deseas incluir u ocultar en el panel de inspección.
+4. **Diseño Responsivo (Celular / Tablet)**:
+   - **Acoplamiento Lateral (Side Dock)**: Cuando el ancho del viewport es menor o igual a `900px` (o está forzado por configuración), el panel se fija automáticamente a un lateral en lugar de flotar sobre el elemento, evitando tapar la pantalla del dispositivo.
+   - **Posición**: Elige el lateral de acoplamiento (**Derecha** o **Izquierda**).
+   - **Ancho del Sidebar**: Ajusta el ancho de la barra lateral (de `200px` a `450px`).
+   - *Nota*: Al estar fijado en el lateral del viewport, el panel se incluye de forma natural y perfecta en los pantallazos de evidencia generados.
+
+### Persistencia de Ajustes
+Toda tu configuración se guarda automáticamente en `localStorage` y se sincroniza globalmente en el archivo local `visual-inspector-settings.json` en la raíz del proyecto. Esto asegura que tus preferencias se mantengan consistentes al navegar entre diferentes dominios e incluso al reiniciar la herramienta.
+
+---
+
 ## Licencia
 
 MIT

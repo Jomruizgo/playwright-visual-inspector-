@@ -106,55 +106,134 @@ export async function captureElement(page, el, vp, sessionDir, idx) {
     const el = document.querySelector(`[data-__vi-disc="${discIdx}"]`);
     if (!el) return false;
 
+    // Cargar configuraciones guardadas localmente en la página
+    const DEFAULT_SETTINGS = {
+      colorFormat: 'hex',
+      highlightColorSource: 'category',
+      customHighlightColor: '#e74c3c',
+      highlightThickness: 2,
+      visibleProperties: {
+        'element': true,
+        'content': true,
+        'font-family': true,
+        'font-size': true,
+        'font-weight': true,
+        'color': true,
+        'background': true,
+        'text-align': true,
+        'width': true,
+        'height': true,
+        'padding': true,
+        'margin': true,
+        'border': true,
+        'overflow-x': false,
+        'text-overflow': false,
+        'white-space': false,
+        'pos x': true,
+        'pos y': true
+      },
+      responsiveDock: true,
+      dockSide: 'right',
+      dockWidth: 280
+    };
+
+    const savedSettings = localStorage.getItem('__vi_settings');
+    const settings = savedSettings 
+      ? { ...DEFAULT_SETTINGS, ...window.__vi_settings, ...JSON.parse(savedSettings) } 
+      : { ...DEFAULT_SETTINGS, ...window.__vi_settings };
+
+    const thickness = settings.highlightThickness || 2;
+    const outlineColor = settings.highlightColorSource === 'custom' 
+      ? settings.customHighlightColor 
+      : color; // Usar color de categoría si no es personalizado
+
     const cs  = window.getComputedStyle(el);
     const rec = el.getBoundingClientRect();
 
-    el.style.outline      = `2px solid ${color}`;
+    el.style.outline      = `${thickness}px solid ${outlineColor}`;
     el.style.outlineOffset = '2px';
     el.dataset.__vi        = '1';
 
-    const rows = [
-      ['element',       el.tagName.toLowerCase() + (classList ? '.' + classList : '')],
-      ['content',       el.textContent.trim().substring(0, 60) || '—'],
-      ['───────────', ''],
-      ['font-family',   cs.fontFamily],
-      ['font-size',     cs.fontSize],
-      ['font-weight',   cs.fontWeight],
-      ['color',         cs.color],
-      ['background',    cs.backgroundColor],
-      ['text-align',    cs.textAlign],
-      ['───────────', ''],
-      ['width',         Math.round(rec.width)  + 'px'],
-      ['height',        Math.round(rec.height) + 'px'],
-      ['padding',       cs.padding],
-      ['margin',        cs.margin],
-      ['border',        cs.border],
-      ['overflow-x',    cs.overflowX],
-      ['text-overflow', cs.textOverflow],
-      ['white-space',   cs.whiteSpace],
-      ['───────────', ''],
-      ['pos x',         Math.round(rec.left) + 'px'],
-      ['pos y',         Math.round(rec.top)  + 'px'],
-    ];
+    // Filtrar y dar formato a las propiedades
+    const rows = [];
+    const showProp = (k) => settings.visibleProperties[k];
+    const formatColor = (c) => settings.colorFormat === 'hex' && window.__vi_rgbToHex ? window.__vi_rgbToHex(c) : c;
 
-    const PANEL_W = 480, PANEL_H = rows.length * 18 + 28;
-    const OUTLINE = 4, GAP = 12;
-    const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
-    const cands = [
-      { left: exp.right + GAP,         top: Math.max(8, exp.top) },
-      { left: exp.left - GAP - PANEL_W, top: Math.max(8, exp.top) },
-      { left: Math.max(8, exp.left),   top: exp.bottom + GAP },
-      { left: Math.max(8, exp.left),   top: exp.top - GAP - PANEL_H },
-    ];
-    let pos = null;
-    for (const c of cands) {
-      const p = { ...c, right: c.left + PANEL_W, bottom: c.top + PANEL_H };
-      if (p.left < 8 || p.right > vpW - 8 || p.top < 8 || p.bottom > vpH - 8) continue;
-      if (!(p.right < exp.left || p.left > exp.right || p.bottom < exp.top || p.top > exp.bottom)) { pos = c; break; }
+    // Secciones dinámicas
+    let s1 = [];
+    if (showProp('element')) s1.push(['element', el.tagName.toLowerCase() + (classList ? '.' + classList : '')]);
+    if (showProp('content')) s1.push(['content', el.textContent.trim().substring(0, 60) || '—']);
+    if (s1.length) rows.push(...s1);
+
+    let s2 = [];
+    if (showProp('font-family')) s2.push(['font-family', cs.fontFamily]);
+    if (showProp('font-size')) s2.push(['font-size', cs.fontSize]);
+    if (showProp('font-weight')) s2.push(['font-weight', cs.fontWeight]);
+    if (showProp('color')) s2.push(['color', formatColor(cs.color)]);
+    if (showProp('background')) s2.push(['background', formatColor(cs.backgroundColor)]);
+    if (showProp('text-align')) s2.push(['text-align', cs.textAlign]);
+    if (s2.length) {
+      if (rows.length) rows.push(['───────────', '']);
+      rows.push(...s2);
     }
-    if (!pos) {
-      const cx = (exp.left + exp.right) / 2, cy = (exp.top + exp.bottom) / 2;
-      pos = { left: cx < vpW / 2 ? vpW - PANEL_W - 8 : 8, top: cy < vpH / 2 ? vpH - PANEL_H - 8 : 8 };
+
+    let s3 = [];
+    if (showProp('width')) s3.push(['width', Math.round(rec.width) + 'px']);
+    if (showProp('height')) s3.push(['height', Math.round(rec.height) + 'px']);
+    if (showProp('padding')) s3.push(['padding', cs.padding]);
+    if (showProp('margin')) s3.push(['margin', cs.margin]);
+    if (showProp('border')) s3.push(['border', cs.border]);
+    if (showProp('overflow-x')) s3.push(['overflow-x', cs.overflowX]);
+    if (showProp('text-overflow')) s3.push(['text-overflow', cs.textOverflow]);
+    if (showProp('white-space')) s3.push(['white-space', cs.whiteSpace]);
+    if (s3.length) {
+      if (rows.length) rows.push(['───────────', '']);
+      rows.push(...s3);
+    }
+
+    let s4 = [];
+    if (showProp('pos x')) s4.push(['pos x', Math.round(rec.left) + 'px']);
+    if (showProp('pos y')) s4.push(['pos y', Math.round(rec.top) + 'px']);
+    if (s4.length) {
+      if (rows.length) rows.push(['───────────', '']);
+      rows.push(...s4);
+    }
+
+    const panelColor = settings.highlightColorSource === 'custom' 
+      ? settings.customHighlightColor 
+      : color;
+
+    // Determinar si se acopla a un lado en base al diseño responsivo (ancho <= 900)
+    const isDocked = settings.responsiveDock && (vpW <= 900);
+
+    const PANEL_W = isDocked ? (settings.dockWidth || 280) : 480;
+    const PANEL_H = rows.length * 18 + 28;
+
+    let cssText = '';
+    if (isDocked) {
+      const side = settings.dockSide || 'right';
+      const borderStyle = side === 'right' ? `border-left:2.5px solid ${panelColor}` : `border-right:2.5px solid ${panelColor}`;
+      cssText = `position:fixed;${side}:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);white-space:pre;overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;${borderStyle}`;
+    } else {
+      const OUTLINE = 4, GAP = 12;
+      const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
+      const cands = [
+        { left: exp.right + GAP,         top: Math.max(8, exp.top) },
+        { left: exp.left - GAP - PANEL_W, top: Math.max(8, exp.top) },
+        { left: Math.max(8, exp.left),   top: exp.bottom + GAP },
+        { left: Math.max(8, exp.left),   top: exp.top - GAP - PANEL_H },
+      ];
+      let pos = null;
+      for (const c of cands) {
+        const p = { ...c, right: c.left + PANEL_W, bottom: c.top + PANEL_H };
+        if (p.left < 8 || p.right > vpW - 8 || p.top < 8 || p.bottom > vpH - 8) continue;
+        if (!(p.right < exp.left || p.left > exp.right || p.bottom < exp.top || p.top > exp.bottom)) { pos = c; break; }
+      }
+      if (!pos) {
+        const cx = (exp.left + exp.right) / 2, cy = (exp.top + exp.bottom) / 2;
+        pos = { left: cx < vpW / 2 ? vpW - PANEL_W - 8 : 8, top: cy < vpH / 2 ? vpH - PANEL_H - 8 : 8 };
+      }
+      cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:8px 10px 10px;border-radius:6px;border:1.5px solid ${panelColor};z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.7);white-space:pre`;
     }
 
     const KEY_W = 14;
@@ -165,10 +244,10 @@ export async function captureElement(page, el, vp, sessionDir, idx) {
 
     const panel = document.createElement('div');
     panel.className = '__vi_overlay';
-    panel.style.cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:8px 10px 10px;border-radius:6px;border:1.5px solid ${color};z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.7);white-space:pre`;
-    panel.innerHTML = `<div style="color:${color};font-weight:700;margin-bottom:4px">▶ ${el.tagName.toLowerCase()} [${color}]</div>` + lines.join('\n');
+    panel.style.cssText = cssText;
+    panel.innerHTML = `<div style="color:${panelColor};font-weight:700;margin-bottom:4px">▶ ${el.tagName.toLowerCase()} [${color}]</div>` + lines.join('\n');
     document.body.appendChild(panel);
-    if (window.__vi_drag) window.__vi_drag(panel);
+    if (!isDocked && window.__vi_drag) window.__vi_drag(panel);
 
     const badge = document.createElement('div');
     badge.className = '__vi_badge';
