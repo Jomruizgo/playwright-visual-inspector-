@@ -86,8 +86,14 @@ async function main() {
     fs.writeFileSync(settingsFile, JSON.stringify(DEFAULT_SETTINGS, null, 2), 'utf8');
   }
 
+  const isDocked = settings.responsiveDock && (width <= 900);
+  const playViewport = {
+    width: isDocked ? (width + (settings.dockWidth || 280)) : width,
+    height: height
+  };
+
   const browser = await chromium.launch({ headless: false, slowMo: 50 });
-  const ctx     = await browser.newContext({ viewport: vp });
+  const ctx     = await browser.newContext({ viewport: playViewport });
 
   // Exponer función para guardar configuraciones desde el navegador
   await ctx.exposeFunction('__vi_saveSettingsNode', (newSettings) => {
@@ -254,10 +260,19 @@ async function main() {
       if (!manualDir) return;
       manualIdx++;
       const filename = path.join(manualDir, `manual-${String(manualIdx).padStart(2, '0')}.png`);
+      // Ocultar botón y panel de configuración antes del screenshot
+      await page.evaluate(() => {
+        const btn = document.querySelector('.__vi_btn_settings');
+        const pnl = document.querySelector('.__vi_settings_panel');
+        if (btn) btn.style.setProperty('display', 'none', 'important');
+        if (pnl) pnl.style.setProperty('display', 'none', 'important');
+      });
       await page.screenshot({ path: filename });
       manualCaptures.push(filename);
       log(`  ✓ Captura manual ${manualIdx} guardada`);
       await page.evaluate(() => {
+        const btn = document.querySelector('.__vi_btn_settings');
+        if (btn) btn.style.display = '';
         document.querySelectorAll('.__vi_overlay, .__vi_badge, .__vi_connector').forEach(e => e.remove());
         document.querySelectorAll('[data-__vi]').forEach(el => {
           el.style.outline = ''; el.style.outlineOffset = ''; delete el.dataset.__vi;
