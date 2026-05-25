@@ -43,6 +43,39 @@ export async function injectListeners(page, vp) {
       ? { ...DEFAULT_SETTINGS, ...window.__vi_settings, ...JSON.parse(savedSettings) } 
       : { ...DEFAULT_SETTINGS, ...window.__vi_settings };
 
+    // ── Utilidad: applyDockStyles ──────────────────────────────────────────────
+    window.__vi_applyDockStyles = function() {
+      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 900);
+      const styleId = '__vi_dock_layout_styles';
+      let style = document.getElementById(styleId);
+      
+      if (isDocked) {
+        if (!style) {
+          style = document.createElement('style');
+          style.id = styleId;
+          document.head.appendChild(style);
+        }
+        const side = window.__vi_settings.dockSide || 'right';
+        const width = window.__vi_settings.dockWidth || 280;
+        
+        style.innerHTML = `
+          html, body {
+            width: ${vpW}px !important;
+            max-width: ${vpW}px !important;
+            min-width: ${vpW}px !important;
+            ${side === 'left' ? `margin-left: ${width}px !important; margin-right: 0 !important;` : `margin-right: ${width}px !important; margin-left: 0 !important;`}
+            box-sizing: border-box !important;
+            overflow-x: hidden !important;
+          }
+        `;
+      } else {
+        if (style) style.remove();
+      }
+    };
+
+    // Aplicar estilos de docking al cargar
+    window.__vi_applyDockStyles();
+
     // ── Utilidad: rgbToHex ──────────────────────────────────────────────────────
     window.__vi_rgbToHex = function(rgbStr) {
       if (!rgbStr || rgbStr === 'rgba(0, 0, 0, 0)' || rgbStr === 'transparent') return 'transparent';
@@ -724,7 +757,8 @@ export async function injectListeners(page, vp) {
       let node = e.target;
       while (node) {
         const cls = typeof node.className === 'string' ? node.className : '';
-        if (cls.includes('__vi_status') || cls.includes('__vi_queue_badge')) return;
+        if (cls.includes('__vi_status') || cls.includes('__vi_queue_badge') ||
+            cls.includes('__vi_btn_settings') || cls.includes('__vi_settings_panel')) return;
         node = node.parentElement;
       }
       e.preventDefault(); e.stopPropagation();

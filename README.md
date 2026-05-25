@@ -220,6 +220,8 @@ Cada screenshot incluye un panel flotante con:
 
 El panel se posiciona automáticamente para no tapar el outline del elemento inspeccionado.
 
+> **Nota:** Los elementos propios de la herramienta (botón ⚙ Ajustes y su panel de configuración) están excluidos del auto-scan y del modo cola — nunca aparecen como elementos inspeccionados.
+
 ---
 
 ## Configuración y Personalización
@@ -236,10 +238,10 @@ Este panel te permite configurar los siguientes aspectos:
 3. **Propiedades Visibles**:
    - Selecciona individualmente mediante checkboxes cuáles de las 18 propiedades computadas deseas incluir u ocultar en el panel de inspección.
 4. **Diseño Responsivo (Celular / Tablet)**:
-   - **Acoplamiento Lateral (Side Dock)**: Cuando el ancho del viewport es menor o igual a `900px` (o está forzado por configuración), el panel se fija automáticamente a un lateral en lugar de flotar sobre el elemento, evitando tapar la pantalla del dispositivo.
+   - **Acoplamiento Lateral (Side Dock)**: Cuando el ancho del viewport es menor o igual a `900px`, el panel de propiedades se fija a un lateral **fuera del área de contenido**. El viewport de Playwright se expande automáticamente en `dockWidth` píxeles adicionales, de modo que el contenido de la página ocupa exactamente el ancho solicitado (p. ej. 375 px) y el panel ocupa el espacio extra adyacente — sin solaparse con la vista inspeccionada.
    - **Posición**: Elige el lateral de acoplamiento (**Derecha** o **Izquierda**).
    - **Ancho del Sidebar**: Ajusta el ancho de la barra lateral (de `200px` a `450px`).
-   - *Nota*: Al estar fijado en el lateral del viewport, el panel se incluye de forma natural y perfecta en los pantallazos de evidencia generados.
+   - *Nota*: Los screenshots resultantes muestran el contenido a su ancho real junto al panel de propiedades, sin ninguna superposición.
 
 ### Persistencia de Ajustes
 Toda tu configuración se guarda automáticamente en `localStorage` y se sincroniza globalmente en el archivo local `visual-inspector-settings.json` en la raíz del proyecto. Esto asegura que tus preferencias se mantengan consistentes al navegar entre diferentes dominios e incluso al reiniciar la herramienta.
