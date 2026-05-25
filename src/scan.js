@@ -238,9 +238,7 @@ export async function captureElement(page, el, vp, sessionDir, idx) {
 
     let cssText = '';
     if (isDocked) {
-      const side = settings.dockSide || 'right';
-      const borderStyle = side === 'right' ? `border-left:2.5px solid ${panelColor}` : `border-right:2.5px solid ${panelColor}`;
-      cssText = `position:fixed;${side}:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);white-space:pre;overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;${borderStyle}`;
+      cssText = `position:fixed;right:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);white-space:pre;overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;border-left:2.5px solid ${panelColor}`;
     } else {
       const OUTLINE = 4, GAP = 12;
       const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
