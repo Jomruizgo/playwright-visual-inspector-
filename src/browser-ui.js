@@ -113,25 +113,19 @@ export async function injectListeners(page, vp) {
           padding: 6px 12px;
           border-radius: 6px;
           z-index: 2147483647;
-          cursor: pointer;
+          cursor: grab;
           font-family: system-ui, -apple-system, sans-serif;
           font-size: 11px;
           font-weight: 600;
           box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s;
           display: flex;
           align-items: center;
           gap: 6px;
           user-select: none;
         }
-        .__vi_btn_settings:hover {
-          background: #f1c40f;
-          color: #1e1e1e;
-          box-shadow: 0 4px 20px rgba(241, 196, 15, 0.4);
-          transform: translateY(-1px);
-        }
         .__vi_btn_settings:active {
-          transform: translateY(0);
+          cursor: grabbing;
         }
         
         .__vi_settings_panel {
@@ -363,8 +357,40 @@ export async function injectListeners(page, vp) {
         }
       };
 
+      // Drag del botón de ajustes (distingue drag de clic)
+      let __vi_btn_did_drag = false;
+      btn.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        const r = btn.getBoundingClientRect();
+        btn.style.left = r.left + 'px';
+        btn.style.top  = r.top  + 'px';
+        const startX = e.clientX, startY = e.clientY;
+        const dx = e.clientX - r.left, dy = e.clientY - r.top;
+        __vi_btn_did_drag = false;
+        const mv = (ev) => {
+          if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) {
+            __vi_btn_did_drag = true;
+            btn.style.left = (ev.clientX - dx) + 'px';
+            btn.style.top  = (ev.clientY - dy) + 'px';
+          }
+        };
+        const up = () => {
+          document.removeEventListener('mousemove', mv);
+          document.removeEventListener('mouseup', up);
+        };
+        document.addEventListener('mousemove', mv);
+        document.addEventListener('mouseup', up);
+        e.stopPropagation();
+      }, true);
+
       btn.addEventListener('click', () => {
+        if (__vi_btn_did_drag) { __vi_btn_did_drag = false; return; }
         const isVisible = panel.style.display === 'flex';
+        if (!isVisible) {
+          const r = btn.getBoundingClientRect();
+          panel.style.left = r.left + 'px';
+          panel.style.top  = (r.bottom + 4) + 'px';
+        }
         panel.style.display = isVisible ? 'none' : 'flex';
       });
       panel.querySelector('#__vi_close_settings').addEventListener('click', () => {
@@ -432,6 +458,9 @@ export async function injectListeners(page, vp) {
       });
 
       if (!sessionStorage.getItem('__vi_settings_shown')) {
+        const r = btn.getBoundingClientRect();
+        panel.style.left = r.left + 'px';
+        panel.style.top  = (r.bottom + 4) + 'px';
         panel.style.display = 'flex';
         sessionStorage.setItem('__vi_settings_shown', 'true');
       }
