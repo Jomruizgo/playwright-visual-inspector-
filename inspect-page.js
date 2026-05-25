@@ -146,6 +146,10 @@ async function main() {
         await injectStatusBadge(page, `⚙ Auto-scan sesión ${sessionNum}...`);
         const session = await runInspection(page, vp, out, sessionNum);
         allSessions.push(session);
+        if (session.isModalScoped) {
+          await injectStatusBadge(page, `✓ Sesión ${sessionNum} — scan acotado al modal`);
+          await page.waitForTimeout(2500);
+        }
         await inject();
       } catch (err) {
         log(`Error en auto-scan: ${err.message}`);

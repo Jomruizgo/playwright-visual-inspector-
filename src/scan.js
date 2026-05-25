@@ -33,9 +33,36 @@ export async function discoverElements(page) {
     let globalIdx = 0;
     const vpW = window.innerWidth, vpH = window.innerHeight;
 
+    // ── Detectar modal activo para acotar el scan ──────────────────────────────
+    const detectModal = () => {
+      const selectors = [
+        'dialog[open]',
+        '[role="dialog"][aria-modal="true"]',
+        '[role="dialog"]',
+        '[aria-modal="true"]',
+      ];
+      for (const sel of selectors) {
+        try {
+          const candidates = Array.from(document.querySelectorAll(sel));
+          const visible = candidates.find(el => {
+            if (el.closest('.__vi_status, .__vi_overlay, .__vi_btn_settings, .__vi_settings_panel')) return false;
+            const cs = window.getComputedStyle(el);
+            const r = el.getBoundingClientRect();
+            return cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 50 && r.height > 50;
+          });
+          if (visible) return visible;
+        } catch { /* selector inválido, ignorar */ }
+      }
+      return null;
+    };
+
+    const modalEl = detectModal();
+    const scope = modalEl ?? document;
+    const isModalScoped = !!modalEl;
+
     for (const cat of categories) {
       let nodes;
-      try { nodes = Array.from(document.querySelectorAll(cat.sel)); }
+      try { nodes = Array.from(scope.querySelectorAll(cat.sel)); }
       catch { continue; }
 
       const isTable = cat.name === 'Cab_tabla' || cat.name === 'Celdas_datos';
@@ -76,7 +103,7 @@ export async function discoverElements(page) {
         });
       }
     }
-    return results;
+    return { elements: results, isModalScoped };
   }, CATEGORIES);
 }
 
@@ -296,14 +323,19 @@ export async function runInspection(page, vp, outDir, sessionNum, prebuiltElemen
   await page.screenshot({ path: path.join(sessionDir, '00-vista-completa.png') });
   await page.evaluate(() => document.querySelectorAll('.__vi_badge').forEach(e => e.remove()));
 
-  const elements = prebuiltElements ?? await discoverElements(page);
+  const discovered = prebuiltElements
+    ? { elements: prebuiltElements, isModalScoped: false }
+    : await discoverElements(page);
+  const elements = discovered.elements;
+  const isModalScoped = discovered.isModalScoped;
+
   if (!prebuiltElements)
-    log(`  → ${elements.length} elementos en ${new Set(elements.map(e => e.category)).size} categorías`);
+    log(`  → ${elements.length} elementos en ${new Set(elements.map(e => e.category)).size} categorías${isModalScoped ? ' [⬛ modal detectado — scan acotado al modal]' : ''}`);
 
   if (elements.length === 0) {
     log('  → No se encontraron elementos visibles.');
     generateSessionReport(sessionDir, { sessionNum, url, vpW: vp.width, vpH: vp.height, timestamp: ts }, [], []);
-    return { dir: sessionDir, url, num: sessionNum, count: 0 };
+    return { dir: sessionDir, url, num: sessionNum, count: 0, isModalScoped };
   }
 
   const updateStatus = async (t) => {
@@ -333,5 +365,5 @@ export async function runInspection(page, vp, outDir, sessionNum, prebuiltElemen
   const count = captured.filter(Boolean).length;
   log(`  → Sesión ${sessionNum} completada. ${count} capturas en ${path.relative(process.cwd(), sessionDir)}/`);
 
-  return { dir: sessionDir, url, num: sessionNum, count, isQueued: !!prebuiltElements };
+  return { dir: sessionDir, url, num: sessionNum, count, isQueued: !!prebuiltElements, isModalScoped };
 }
