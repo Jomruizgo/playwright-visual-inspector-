@@ -248,7 +248,6 @@ Este panel te permite configurar los siguientes aspectos:
    - Selecciona individualmente mediante checkboxes cuáles de las 18 propiedades computadas deseas incluir u ocultar en el panel de inspección.
 4. **Diseño Responsivo (Celular / Tablet)**:
    - **Acoplamiento Lateral (Side Dock)**: Cuando el ancho del viewport es menor o igual a `900px`, el panel de propiedades se fija a un lateral **fuera del área de contenido**. El viewport de Playwright se expande automáticamente en `dockWidth` píxeles adicionales, de modo que el contenido de la página ocupa exactamente el ancho solicitado (p. ej. 375 px) y el panel ocupa el espacio extra adyacente — sin solaparse con la vista inspeccionada.
-   - **Posición**: Elige el lateral de acoplamiento (**Derecha** o **Izquierda**).
    - **Ancho del Sidebar**: Ajusta el ancho de la barra lateral (de `200px` a `450px`).
    - *Nota*: Los screenshots resultantes muestran el contenido a su ancho real junto al panel de propiedades, sin ninguna superposición.
 

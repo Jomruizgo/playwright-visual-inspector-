@@ -55,15 +55,15 @@ export async function injectListeners(page, vp) {
           style.id = styleId;
           document.head.appendChild(style);
         }
-        const side = window.__vi_settings.dockSide || 'right';
         const width = window.__vi_settings.dockWidth || 280;
-        
+
         style.innerHTML = `
           html, body {
             width: ${vpW}px !important;
             max-width: ${vpW}px !important;
             min-width: ${vpW}px !important;
-            ${side === 'left' ? `margin-left: ${width}px !important; margin-right: 0 !important;` : `margin-right: ${width}px !important; margin-left: 0 !important;`}
+            margin-right: ${width}px !important;
+            margin-left: 0 !important;
             box-sizing: border-box !important;
             overflow-x: hidden !important;
           }
@@ -336,13 +336,6 @@ export async function injectListeners(page, vp) {
           </div>
           
           <div id="__vi_dock_options" style="display: ${settings.responsiveDock ? 'block' : 'none'}; margin-top: 4px;">
-            <div class="__vi_row" style="margin-bottom: 6px;">
-              <span>Lado del panel:</span>
-              <div class="__vi_radio_group" id="__vi_opt_dock_side">
-                <div class="__vi_radio_btn ${settings.dockSide === 'right' ? 'active' : ''}" data-value="right">Derecha</div>
-                <div class="__vi_radio_btn ${settings.dockSide === 'left' ? 'active' : ''}" data-value="left">Izquierda</div>
-              </div>
-            </div>
             <div class="__vi_row">
               <span>Ancho de barra:</span>
               <span id="__vi_dock_width_val" style="font-weight:bold;color:#f1c40f;">${settings.dockWidth}px</span>
@@ -428,15 +421,6 @@ export async function injectListeners(page, vp) {
         window.__vi_settings.responsiveDock = responsiveDockCheckbox.checked;
         dockOptionsDiv.style.display = responsiveDockCheckbox.checked ? 'block' : 'none';
         saveSettings();
-      });
-
-      panel.querySelectorAll('#__vi_opt_dock_side .__vi_radio_btn').forEach(b => {
-        b.addEventListener('click', () => {
-          panel.querySelectorAll('#__vi_opt_dock_side .__vi_radio_btn').forEach(x => x.classList.remove('active'));
-          b.classList.add('active');
-          window.__vi_settings.dockSide = b.dataset.value;
-          saveSettings();
-        });
       });
 
       const dockWidthInput = panel.querySelector('#__vi_opt_dock_width');
@@ -544,9 +528,7 @@ export async function injectListeners(page, vp) {
 
       let cssText = '';
       if (isDocked) {
-        const side = window.__vi_settings.dockSide || 'right';
-        const borderStyle = side === 'right' ? `border-left:2.5px solid ${panelColor}` : `border-right:2.5px solid ${panelColor}`;
-        cssText = `position:fixed;${side}:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);white-space:pre;overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;${borderStyle}`;
+        cssText = `position:fixed;right:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);white-space:pre;overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;border-left:2.5px solid ${panelColor}`;
       } else {
         const OUTLINE = 4, GAP = 12;
         const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
