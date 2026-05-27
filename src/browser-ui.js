@@ -847,8 +847,20 @@ export async function injectListeners(page, vp) {
         const midX = (dlx1 + dlx2) / 2, midY = (dly1 + dly2) / 2;
         const label = `${c.dist}px`;
         const lw = label.length * 8 + 18;
-        h += `<line x1="${dlx1}" y1="${dly1}" x2="${dlx2}" y2="${dly2}" stroke="${col}" stroke-width="2" opacity="${alpha}"/>`;
-        h += `<rect x="${midX - lw / 2}" y="${midY - 11}" width="${lw}" height="19" rx="4" fill="#1e1e1e" opacity="${(alpha * 0.88).toFixed(2)}"/>`;
+        // Línea de cota partida en el centro para no cruzar el texto
+        const LGAP = 5;
+        if (c.isH) {
+          const xL = Math.min(dlx1, dlx2), xR = Math.max(dlx1, dlx2);
+          const sL = midX - lw / 2 - LGAP, sR = midX + lw / 2 + LGAP;
+          if (sL > xL) h += `<line x1="${xL}" y1="${dly1}" x2="${sL}" y2="${dly1}" stroke="${col}" stroke-width="2" opacity="${alpha}"/>`;
+          if (sR < xR) h += `<line x1="${sR}" y1="${dly1}" x2="${xR}" y2="${dly1}" stroke="${col}" stroke-width="2" opacity="${alpha}"/>`;
+        } else {
+          const yT = Math.min(dly1, dly2), yB = Math.max(dly1, dly2);
+          const sT = midY - 11 - LGAP, sB = midY + 8 + LGAP;
+          if (sT > yT) h += `<line x1="${dlx1}" y1="${yT}" x2="${dlx1}" y2="${sT}" stroke="${col}" stroke-width="2" opacity="${alpha}"/>`;
+          if (sB < yB) h += `<line x1="${dlx1}" y1="${sB}" x2="${dlx1}" y2="${yB}" stroke="${col}" stroke-width="2" opacity="${alpha}"/>`;
+        }
+        h += `<rect x="${midX - lw / 2}" y="${midY - 11}" width="${lw}" height="19" rx="4" fill="#1a1a2e" opacity="${(alpha * 0.93).toFixed(2)}"/>`;
         h += `<text x="${midX}" y="${midY + 5}" text-anchor="middle" font-family="Consolas,monospace" font-size="12" font-weight="700" fill="${col}" opacity="${alpha}">${label}</text>`;
         h += dot(ax, ay, col, alpha);
         h += dot(bx, by, col, alpha);
