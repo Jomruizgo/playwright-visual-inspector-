@@ -703,6 +703,143 @@ export async function injectListeners(page, vp) {
       if (s) s.textContent = '⟺ Comparación — Ctrl+Shift+S para capturar | clic para nueva selección';
     };
 
+    // ── Modo Medición ──────────────────────────────────────────────────────────
+    window.__vi_measure_state = { pt1: null, svg: null };
+
+    window.__vi_toggleMeasure = function() {
+      const m = window.__vi_measure_state;
+      if (window.__vi_mode === 'measure') {
+        window.__vi_mode = 'idle';
+        document.body.style.cursor = '';
+        if (m.svg) { m.svg.remove(); m.svg = null; }
+        m.pt1 = null;
+        return;
+      }
+      window.__vi_mode = 'measure';
+      m.pt1 = null;
+      document.body.style.cursor = 'crosshair';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.id = '__vi_measure_svg';
+      svg.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483646;overflow:visible';
+      document.body.appendChild(svg);
+      m.svg = svg;
+      const s = document.querySelector('.__vi_status');
+      if (s) { s.style.borderColor = '#00d2ff'; s.style.color = '#00d2ff'; s.textContent = '📏 Medición — clic en punto inicial | Esc = salir'; }
+    };
+
+    // Snap al borde de elemento más cercano dentro de 8px
+    window.__vi_measureSnap = function(cx, cy) {
+      const THR = 8;
+      let snapX = cx, snapY = cy, dX = THR + 1, dY = THR + 1;
+      const IGNORE = '.__vi_status, .__vi_overlay, .__vi_badge, .__vi_connector, .__vi_btn_settings, .__vi_settings_panel, .__vi_queue_badge';
+      for (const el of document.elementsFromPoint(cx, cy)) {
+        if (el === document.documentElement || el === document.body) continue;
+        if (el.id === '__vi_measure_svg') continue;
+        try { if (el.closest(IGNORE)) continue; } catch {}
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4) continue;
+        for (const ex of [r.left, r.right]) {
+          const d = Math.abs(cx - ex); if (d < dX) { dX = d; snapX = ex; }
+        }
+        for (const ey of [r.top, r.bottom]) {
+          const d = Math.abs(cy - ey); if (d < dY) { dY = d; snapY = ey; }
+        }
+      }
+      return { x: Math.round(snapX), y: Math.round(snapY) };
+    };
+
+    // Dibujar el overlay SVG de medición
+    window.__vi_measureDraw = function(rawX, rawY) {
+      const m = window.__vi_measure_state;
+      if (!m.svg) return;
+      const C = '#00d2ff';
+      const pt1 = m.pt1;
+
+      const guide  = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C}" stroke-width="0.5" stroke-dasharray="5,4" opacity="0.35"/>`;
+      const dot    = (x, y)            => `<circle cx="${x}" cy="${y}" r="4" fill="${C}" stroke="#1e1e1e" stroke-width="1.5"/>`;
+      const tick   = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C}" stroke-width="2"/>`;
+
+      let html = '';
+
+      if (pt1) {
+        html += guide(0, pt1.y, '10000', pt1.y);
+        html += guide(pt1.x, 0, pt1.x, '10000');
+        html += dot(pt1.x, pt1.y);
+      }
+
+      if (pt1 && rawX !== null) {
+        const s2  = window.__vi_measureSnap(rawX, rawY);
+        const px2 = s2.x, py2 = s2.y;
+        const dx  = Math.abs(px2 - pt1.x), dy = Math.abs(py2 - pt1.y);
+        const isH = dx >= dy;
+
+        // Extremos de la cota proyectada al eje dominante
+        const lx1 = pt1.x,            ly1 = pt1.y;
+        const lx2 = isH ? px2 : pt1.x, ly2 = isH ? pt1.y : py2;
+        const dist = isH ? dx : dy;
+        const midX = (lx1 + lx2) / 2, midY = (ly1 + ly2) / 2;
+
+        html += guide(0, py2, '10000', py2);
+        html += guide(px2, 0, px2, '10000');
+
+        if (isH) {
+          html += tick(lx1, ly1 - 7, lx1, ly1 + 7);
+          html += tick(lx2, ly2 - 7, lx2, ly2 + 7);
+        } else {
+          html += tick(lx1 - 7, ly1, lx1 + 7, ly1);
+          html += tick(lx2 - 7, ly2, lx2 + 7, ly2);
+        }
+        html += `<line x1="${lx1}" y1="${ly1}" x2="${lx2}" y2="${ly2}" stroke="${C}" stroke-width="2"/>`;
+
+        // Label con fondo
+        const label = `${dist}px`;
+        const lw = label.length * 8 + 18;
+        html += `<rect x="${midX - lw / 2}" y="${midY - 11}" width="${lw}" height="19" rx="4" fill="#1e1e1e" opacity="0.88"/>`;
+        html += `<text x="${midX}" y="${midY + 5}" text-anchor="middle" font-family="Consolas,monospace" font-size="12" font-weight="700" fill="${C}">${label}</text>`;
+        html += dot(px2, py2);
+      }
+
+      m.svg.innerHTML = html;
+    };
+
+    // mousemove → preview en vivo
+    document.addEventListener('mousemove', (e) => {
+      if (window.__vi_mode !== 'measure') return;
+      window.__vi_measureDraw(e.clientX, e.clientY);
+    }, true);
+
+    // click → fijar puntos
+    document.addEventListener('click', (e) => {
+      if (window.__vi_mode !== 'measure') return;
+      let node = e.target;
+      while (node) {
+        const cls = typeof node.className === 'string' ? node.className : '';
+        if (cls.includes('__vi_btn_settings') || cls.includes('__vi_settings_panel') || cls.includes('__vi_status')) return;
+        node = node.parentElement;
+      }
+      e.preventDefault(); e.stopPropagation();
+      const m    = window.__vi_measure_state;
+      const snap = window.__vi_measureSnap(e.clientX, e.clientY);
+      const s    = document.querySelector('.__vi_status');
+
+      if (!m.pt1) {
+        m.pt1 = { x: snap.x, y: snap.y };
+        if (s) s.textContent = '📏 Medición — clic en punto final | Esc = salir';
+      } else {
+        const dx = Math.abs(snap.x - m.pt1.x), dy = Math.abs(snap.y - m.pt1.y);
+        const isH = dx >= dy, dist = isH ? dx : dy;
+        if (s) s.textContent = `📏 ${isH ? '↔' : '↕'} ${dist}px — continúa desde aquí | Esc = salir`;
+        m.pt1 = { x: snap.x, y: snap.y };
+      }
+    }, true);
+
+    // Escape → salir de medición
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && window.__vi_mode === 'measure') {
+        window.__vi_toggleMeasure();
+      }
+    });
+
     // ── keydown ────────────────────────────────────────────────────────────────
     document.addEventListener('keydown', (e) => {
       if (!e.ctrlKey || !e.shiftKey) return;
@@ -717,6 +854,9 @@ export async function injectListeners(page, vp) {
       } else if (e.key === 'Q') {
         e.preventDefault();
         console.log('__TOGGLE_QUEUE__');
+      } else if (e.key === 'D') {
+        e.preventDefault();
+        window.__vi_toggleMeasure();
       } else if (e.key === 'X') {
         e.preventDefault();
         console.log('__EXIT__');
