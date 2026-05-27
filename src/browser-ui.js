@@ -704,29 +704,31 @@ export async function injectListeners(page, vp) {
     };
 
     // ── Modo Medición ──────────────────────────────────────────────────────────
-    // Estado: pt1 = punto de origen activo, svg = overlay, cotas = historial
-    window.__vi_measure_state = { pt1: null, svg: null, cotas: [] };
+    // cotas[]: historial de cotas finalizadas
+    // selectedCota: índice seleccionado (naranja) → Supr = eliminar
+    // movingEndpoint: { cotaIdx, ptKey:'p1'|'p2' } mientras se reubica un extremo
+    window.__vi_measure_state = { pt1: null, svg: null, cotas: [], selectedCota: null, movingEndpoint: null };
 
     window.__vi_toggleMeasure = function() {
       const m = window.__vi_measure_state;
       const s = document.querySelector('.__vi_status');
       if (window.__vi_mode === 'measure') {
-        // Salir del modo — conservar cotas visibles en el SVG
+        // Salir — conservar cotas en el SVG como referencia visual
         window.__vi_mode = 'idle';
         document.body.style.cursor = '';
         m.pt1 = null;
-        window.__vi_measureDraw(null, null); // redibujar solo cotas finalizadas
+        m.movingEndpoint = null;
+        window.__vi_measureDraw(null, null);
         if (s) {
-          s.style.borderColor = '';
-          s.style.color = '';
+          s.style.borderColor = '#27ae60';
+          s.style.color = '#27ae60';
           s.textContent = '⏸ Listo  (S=auto | M=manual | Q=cola | D=medición | X=cerrar)  [Ctrl+Shift+…]';
         }
         return;
       }
-      // Entrar al modo — limpiar sesión anterior y empezar fresco
+      // Entrar — limpiar sesión anterior y empezar fresco
       if (m.svg) { m.svg.remove(); m.svg = null; }
-      m.cotas = [];
-      m.pt1   = null;
+      m.cotas = []; m.pt1 = null; m.selectedCota = null; m.movingEndpoint = null;
       window.__vi_mode = 'measure';
       document.body.style.cursor = 'crosshair';
       const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -734,7 +736,7 @@ export async function injectListeners(page, vp) {
       svg.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483646;overflow:visible';
       document.body.appendChild(svg);
       m.svg = svg;
-      if (s) { s.style.borderColor = '#00d2ff'; s.style.color = '#00d2ff'; s.textContent = '📏 Medición — clic en punto inicial | Esc = cancelar | D = limpiar y salir'; }
+      if (s) { s.style.borderColor = '#00d2ff'; s.style.color = '#00d2ff'; s.textContent = '📏 Medición — clic en punto inicial | Esc = cancelar | Ctrl+Shift+D = limpiar'; }
     };
 
     // Snap al borde de elemento más cercano dentro de 8px
@@ -758,50 +760,105 @@ export async function injectListeners(page, vp) {
       return { x: Math.round(snapX), y: Math.round(snapY) };
     };
 
-    // Dibujar el overlay SVG: cotas finalizadas (persistentes) + preview activo
+    // Hit-test sobre cotas existentes: retorna { type, cotaIdx, ptKey? } o null
+    window.__vi_measureHit = function(cx, cy) {
+      const m = window.__vi_measure_state;
+      const EP_THR = 10, LN_THR = 5;
+      for (let i = 0; i < m.cotas.length; i++) {
+        const c = m.cotas[i];
+        const vp1x = c.x1, vp1y = c.y1;
+        const vp2x = c.isH ? c.x2 : c.x1, vp2y = c.isH ? c.y1 : c.y2;
+        if (Math.hypot(cx - vp1x, cy - vp1y) <= EP_THR) return { type: 'endpoint', cotaIdx: i, ptKey: 'p1' };
+        if (Math.hypot(cx - vp2x, cy - vp2y) <= EP_THR) return { type: 'endpoint', cotaIdx: i, ptKey: 'p2' };
+        if (c.isH) {
+          if (Math.abs(cy - vp1y) <= LN_THR && cx >= Math.min(vp1x, vp2x) - LN_THR && cx <= Math.max(vp1x, vp2x) + LN_THR)
+            return { type: 'line', cotaIdx: i };
+        } else {
+          if (Math.abs(cx - vp1x) <= LN_THR && cy >= Math.min(vp1y, vp2y) - LN_THR && cy <= Math.max(vp1y, vp2y) + LN_THR)
+            return { type: 'line', cotaIdx: i };
+        }
+      }
+      return null;
+    };
+
+    // Dibujar el overlay SVG: cotas persistentes + preview activo
     window.__vi_measureDraw = function(rawX, rawY) {
       const m = window.__vi_measure_state;
       if (!m.svg) return;
-      const C = '#00d2ff';
+      const C    = '#00d2ff'; // cyan — normal
+      const CSEL = '#f39c12'; // naranja — seleccionada
+      const CMOV = '#2ecc71'; // verde — endpoint en movimiento
 
-      const guide = (x1, y1, x2, y2, op) =>
-        `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C}" stroke-width="0.5" stroke-dasharray="5,4" opacity="${op !== undefined ? op : 0.35}"/>`;
-      const dot   = (x, y, op) =>
-        `<circle cx="${x}" cy="${y}" r="4" fill="${C}" stroke="#1e1e1e" stroke-width="1.5" opacity="${op !== undefined ? op : 1}"/>`;
-      const tick  = (x1, y1, x2, y2, op) =>
-        `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C}" stroke-width="2" opacity="${op !== undefined ? op : 1}"/>`;
+      const guide = (x1, y1, x2, y2, col) =>
+        `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col || C}" stroke-width="0.5" stroke-dasharray="5,4" opacity="0.35"/>`;
+      const dot = (x, y, col, op) =>
+        `<circle cx="${x}" cy="${y}" r="4" fill="${col || C}" stroke="#1e1e1e" stroke-width="1.5" opacity="${op !== undefined ? op : 1}"/>`;
+      const ring = (x, y, col) =>
+        `<circle cx="${x}" cy="${y}" r="7" fill="none" stroke="${col}" stroke-width="2" opacity="0.9"/>`;
 
-      // Dibuja una cota finalizada con opacidad reducida
-      const drawCota = (c, alpha) => {
+      const drawCota = (c, col, alpha) => {
         const lx1 = c.x1, ly1 = c.y1;
         const lx2 = c.isH ? c.x2 : c.x1, ly2 = c.isH ? c.y1 : c.y2;
         const midX = (lx1 + lx2) / 2, midY = (ly1 + ly2) / 2;
         const label = `${c.dist}px`;
         const lw = label.length * 8 + 18;
+        const tk = (x1, y1, x2, y2) =>
+          `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="2" opacity="${alpha}"/>`;
         let h = '';
         if (c.isH) {
-          h += tick(lx1, ly1 - 7, lx1, ly1 + 7, alpha);
-          h += tick(lx2, ly2 - 7, lx2, ly2 + 7, alpha);
+          h += tk(lx1, ly1 - 7, lx1, ly1 + 7);
+          h += tk(lx2, ly2 - 7, lx2, ly2 + 7);
         } else {
-          h += tick(lx1 - 7, ly1, lx1 + 7, ly1, alpha);
-          h += tick(lx2 - 7, ly2, lx2 + 7, ly2, alpha);
+          h += tk(lx1 - 7, ly1, lx1 + 7, ly1);
+          h += tk(lx2 - 7, ly2, lx2 + 7, ly2);
         }
-        h += `<line x1="${lx1}" y1="${ly1}" x2="${lx2}" y2="${ly2}" stroke="${C}" stroke-width="2" opacity="${alpha}"/>`;
+        h += `<line x1="${lx1}" y1="${ly1}" x2="${lx2}" y2="${ly2}" stroke="${col}" stroke-width="2" opacity="${alpha}"/>`;
         h += `<rect x="${midX - lw / 2}" y="${midY - 11}" width="${lw}" height="19" rx="4" fill="#1e1e1e" opacity="${(alpha * 0.88).toFixed(2)}"/>`;
-        h += `<text x="${midX}" y="${midY + 5}" text-anchor="middle" font-family="Consolas,monospace" font-size="12" font-weight="700" fill="${C}" opacity="${alpha}">${label}</text>`;
-        h += dot(lx1, ly1, alpha);
-        h += dot(lx2, ly2, alpha);
+        h += `<text x="${midX}" y="${midY + 5}" text-anchor="middle" font-family="Consolas,monospace" font-size="12" font-weight="700" fill="${col}" opacity="${alpha}">${label}</text>`;
+        h += dot(lx1, ly1, col, alpha);
+        h += dot(lx2, ly2, col, alpha);
         return h;
       };
 
       let html = '';
 
-      // 1. Cotas finalizadas (persistentes)
-      for (const c of m.cotas) {
-        html += drawCota(c, 0.55);
+      // 1. Cotas finalizadas
+      for (let i = 0; i < m.cotas.length; i++) {
+        if (m.movingEndpoint && m.movingEndpoint.cotaIdx === i) continue; // se redibuja en sección 2
+        const isSel = m.selectedCota === i;
+        html += drawCota(m.cotas[i], isSel ? CSEL : C, isSel ? 1.0 : 0.55);
+        if (isSel) {
+          const c = m.cotas[i];
+          html += ring(c.x1, c.y1, CSEL);
+          html += ring(c.isH ? c.x2 : c.x1, c.isH ? c.y1 : c.y2, CSEL);
+        }
       }
 
-      // 2. Preview del punto de origen activo
+      // 2. Preview de endpoint en movimiento
+      if (m.movingEndpoint) {
+        const { cotaIdx, ptKey } = m.movingEndpoint;
+        const orig = m.cotas[cotaIdx];
+        if (rawX !== null) {
+          const sp = window.__vi_measureSnap(rawX, rawY);
+          let nc;
+          if (ptKey === 'p1') {
+            const ndx = Math.abs(orig.x2 - sp.x), ndy = Math.abs(orig.y2 - sp.y);
+            const nH = ndx >= ndy;
+            nc = { x1: sp.x, y1: sp.y, x2: orig.x2, y2: orig.y2, isH: nH, dist: nH ? ndx : ndy };
+          } else {
+            const ndx = Math.abs(sp.x - orig.x1), ndy = Math.abs(sp.y - orig.y1);
+            const nH = ndx >= ndy;
+            nc = { x1: orig.x1, y1: orig.y1, x2: sp.x, y2: sp.y, isH: nH, dist: nH ? ndx : ndy };
+          }
+          html += drawCota(nc, CMOV, 0.9);
+          html += guide(0, sp.y, '10000', sp.y, CMOV);
+          html += guide(sp.x, 0, sp.x, '10000', CMOV);
+        } else {
+          html += drawCota(orig, CMOV, 0.55);
+        }
+      }
+
+      // 3. Origen activo de la nueva cota (pt1)
       const pt1 = m.pt1;
       if (pt1) {
         html += guide(0, pt1.y, '10000', pt1.y);
@@ -809,7 +866,7 @@ export async function injectListeners(page, vp) {
         html += dot(pt1.x, pt1.y);
       }
 
-      // 3. Cota en progreso (solo con rawX válido y pt1 activo)
+      // 4. Cota en progreso (preview hasta el cursor)
       if (pt1 && rawX !== null) {
         const s2  = window.__vi_measureSnap(rawX, rawY);
         const px2 = s2.x, py2 = s2.y;
@@ -819,15 +876,16 @@ export async function injectListeners(page, vp) {
         const lx2 = isH ? px2 : pt1.x,  ly2 = isH ? pt1.y : py2;
         const dist = isH ? dx : dy;
         const midX = (lx1 + lx2) / 2,   midY = (ly1 + ly2) / 2;
-
+        const tk = (x1, y1, x2, y2) =>
+          `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${C}" stroke-width="2"/>`;
         html += guide(0, py2, '10000', py2);
         html += guide(px2, 0, px2, '10000');
         if (isH) {
-          html += tick(lx1, ly1 - 7, lx1, ly1 + 7);
-          html += tick(lx2, ly2 - 7, lx2, ly2 + 7);
+          html += tk(lx1, ly1 - 7, lx1, ly1 + 7);
+          html += tk(lx2, ly2 - 7, lx2, ly2 + 7);
         } else {
-          html += tick(lx1 - 7, ly1, lx1 + 7, ly1);
-          html += tick(lx2 - 7, ly2, lx2 + 7, ly2);
+          html += tk(lx1 - 7, ly1, lx1 + 7, ly1);
+          html += tk(lx2 - 7, ly2, lx2 + 7, ly2);
         }
         html += `<line x1="${lx1}" y1="${ly1}" x2="${lx2}" y2="${ly2}" stroke="${C}" stroke-width="2"/>`;
         const label = `${dist}px`;
@@ -840,13 +898,20 @@ export async function injectListeners(page, vp) {
       m.svg.innerHTML = html;
     };
 
-    // mousemove → preview en vivo
+    // mousemove → preview en vivo + cursor adaptativo según hover
     document.addEventListener('mousemove', (e) => {
       if (window.__vi_mode !== 'measure') return;
+      const m = window.__vi_measure_state;
+      if (!m.pt1 && !m.movingEndpoint) {
+        const hit = window.__vi_measureHit(e.clientX, e.clientY);
+        if (hit && hit.type === 'endpoint')  document.body.style.cursor = 'move';
+        else if (hit && hit.type === 'line') document.body.style.cursor = 'pointer';
+        else                                 document.body.style.cursor = 'crosshair';
+      }
       window.__vi_measureDraw(e.clientX, e.clientY);
     }, true);
 
-    // click → fijar puntos y acumular cotas
+    // click → edición de cotas o nueva medición
     document.addEventListener('click', (e) => {
       if (window.__vi_mode !== 'measure') return;
       let node = e.target;
@@ -856,37 +921,100 @@ export async function injectListeners(page, vp) {
         node = node.parentElement;
       }
       e.preventDefault(); e.stopPropagation();
-      const m    = window.__vi_measure_state;
-      const snap = window.__vi_measureSnap(e.clientX, e.clientY);
-      const s    = document.querySelector('.__vi_status');
+      const m      = window.__vi_measure_state;
+      const snapPt = window.__vi_measureSnap(e.clientX, e.clientY);
+      const s      = document.querySelector('.__vi_status');
 
+      // A. Finalizar reubicación de endpoint
+      if (m.movingEndpoint) {
+        const { cotaIdx, ptKey } = m.movingEndpoint;
+        const orig = m.cotas[cotaIdx];
+        if (ptKey === 'p1') {
+          const ndx = Math.abs(orig.x2 - snapPt.x), ndy = Math.abs(orig.y2 - snapPt.y);
+          const nH = ndx >= ndy;
+          m.cotas[cotaIdx] = { x1: snapPt.x, y1: snapPt.y, x2: orig.x2, y2: orig.y2, isH: nH, dist: nH ? ndx : ndy };
+        } else {
+          const ndx = Math.abs(snapPt.x - orig.x1), ndy = Math.abs(snapPt.y - orig.y1);
+          const nH = ndx >= ndy;
+          m.cotas[cotaIdx] = { x1: orig.x1, y1: orig.y1, x2: snapPt.x, y2: snapPt.y, isH: nH, dist: nH ? ndx : ndy };
+        }
+        m.movingEndpoint = null;
+        document.body.style.cursor = 'crosshair';
+        window.__vi_measureDraw(null, null);
+        if (s) s.textContent = '📏 Medición — clic en punto inicial | Esc = cancelar | Ctrl+Shift+D = limpiar';
+        return;
+      }
+
+      // B. Sin cota activa → hit-test para edición
       if (!m.pt1) {
-        m.pt1 = { x: snap.x, y: snap.y };
+        const hit = window.__vi_measureHit(e.clientX, e.clientY);
+        if (hit && hit.type === 'endpoint') {
+          m.movingEndpoint = { cotaIdx: hit.cotaIdx, ptKey: hit.ptKey };
+          m.selectedCota = null;
+          document.body.style.cursor = 'move';
+          window.__vi_measureDraw(null, null);
+          if (s) s.textContent = '📏 Moviendo extremo — clic para fijar nueva posición | Esc = cancelar';
+          return;
+        }
+        if (hit && hit.type === 'line') {
+          const isSame = m.selectedCota === hit.cotaIdx;
+          m.selectedCota = isSame ? null : hit.cotaIdx;
+          window.__vi_measureDraw(null, null);
+          if (s) s.textContent = isSame
+            ? '📏 Medición — clic en punto inicial | Esc = cancelar | Ctrl+Shift+D = limpiar'
+            : '📏 Cota seleccionada — Supr = eliminar | clic fuera = deseleccionar';
+          return;
+        }
+        // Click en vacío → deseleccionar si hay cota activa
+        if (m.selectedCota !== null) {
+          m.selectedCota = null;
+          window.__vi_measureDraw(null, null);
+          if (s) s.textContent = '📏 Medición — clic en punto inicial | Esc = cancelar | Ctrl+Shift+D = limpiar';
+          return;
+        }
+      }
+
+      // C. Medición normal
+      if (!m.pt1) {
+        m.pt1 = { x: snapPt.x, y: snapPt.y };
         if (s) s.textContent = '📏 Medición — clic en punto final | Esc = cancelar';
       } else {
-        const dx = Math.abs(snap.x - m.pt1.x), dy = Math.abs(snap.y - m.pt1.y);
+        const dx = Math.abs(snapPt.x - m.pt1.x), dy = Math.abs(snapPt.y - m.pt1.y);
         const isH = dx >= dy, dist = isH ? dx : dy;
-        // Guardar cota como finalizada y continuar en cadena
-        m.cotas.push({ x1: m.pt1.x, y1: m.pt1.y, x2: snap.x, y2: snap.y, isH, dist });
+        m.cotas.push({ x1: m.pt1.x, y1: m.pt1.y, x2: snapPt.x, y2: snapPt.y, isH, dist });
         if (s) s.textContent = `📏 ${isH ? '↔' : '↕'} ${dist}px — continúa desde aquí | Esc = cancelar`;
-        m.pt1 = { x: snap.x, y: snap.y };
+        m.pt1 = { x: snapPt.x, y: snapPt.y };
       }
     }, true);
 
-    // Escape — dos niveles:
-    //   · Con pt1 activo  → cancela la cota en progreso, queda en modo medición
-    //   · Sin pt1         → sale del modo conservando las cotas visibles en el SVG
+    // Escape (3 niveles) + Delete → eliminar cota seleccionada
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && window.__vi_mode === 'measure') {
-        const m = window.__vi_measure_state;
-        const s = document.querySelector('.__vi_status');
-        if (m.pt1) {
+      if (window.__vi_mode !== 'measure') return;
+      const m = window.__vi_measure_state;
+      const s = document.querySelector('.__vi_status');
+      if (e.key === 'Escape') {
+        if (m.movingEndpoint) {
+          m.movingEndpoint = null;
+          document.body.style.cursor = 'crosshair';
+          window.__vi_measureDraw(null, null);
+          if (s) s.textContent = '📏 Medición — clic en punto inicial | Esc = salir';
+        } else if (m.pt1) {
           m.pt1 = null;
           window.__vi_measureDraw(null, null);
-          if (s) s.textContent = '📏 Medición — clic en punto inicial | Esc = salir (cotas guardadas)';
+          if (s) s.textContent = '📏 Medición — clic en punto inicial | Esc = salir';
+        } else if (m.selectedCota !== null) {
+          m.selectedCota = null;
+          window.__vi_measureDraw(null, null);
+          if (s) s.textContent = '📏 Medición — clic en punto inicial | Esc = salir';
         } else {
           window.__vi_toggleMeasure();
         }
+      }
+      if (e.key === 'Delete' && m.selectedCota !== null) {
+        m.cotas.splice(m.selectedCota, 1);
+        m.selectedCota = null;
+        window.__vi_measureDraw(null, null);
+        if (s) s.textContent = '📏 Medición — clic en punto inicial | Esc = cancelar | Ctrl+Shift+D = limpiar';
       }
     });
 
