@@ -117,7 +117,7 @@ async function main() {
   const inject = async () => {
     try {
       await injectListeners(page, vp);
-      await injectStatusBadge(page, '⏸ Listo  (S=auto | M=manual | Q=cola | X=cerrar)  [Ctrl+Shift+…]');
+      await injectStatusBadge(page, '⏸ Listo  (S=auto | M=manual | Q=cola | D=medición | X=cerrar)  [Ctrl+Shift+…]');
     } catch { /* navegación en curso */ }
   };
 
@@ -125,7 +125,7 @@ async function main() {
   await inject();
 
   log('Browser abierto. Navega a la vista que quieras documentar.');
-  log('Ctrl+Shift+S → auto-scan  |  Ctrl+Shift+M → manual  |  Ctrl+Shift+Q → cola  |  Ctrl+Shift+X → cerrar');
+  log('Ctrl+Shift+S → auto-scan  |  Ctrl+Shift+M → manual  |  Ctrl+Shift+Q → cola  |  Ctrl+Shift+D → medición  |  Ctrl+Shift+X → cerrar');
   log('');
 
   let sessionNum     = 0;
