@@ -586,7 +586,7 @@ export async function injectListeners(page, vp) {
 
       let cssText = '';
       if (isDocked) {
-        cssText = `position:fixed;right:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);white-space:pre;overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;border-left:2.5px solid ${panelColor}`;
+        cssText = `position:fixed;right:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;border-left:2.5px solid ${panelColor};position:relative`;
       } else {
         const OUTLINE = 4, GAP = 12;
         const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
@@ -606,24 +606,51 @@ export async function injectListeners(page, vp) {
           const cx = (exp.left + exp.right) / 2, cy = (exp.top + exp.bottom) / 2;
           pos = { left: cx < vpW / 2 ? vpW - PANEL_W - 8 : 8, top: cy < vpH / 2 ? vpH - PANEL_H - 8 : 8 };
         }
-        cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:8px 10px 10px;border-radius:6px;border:1.5px solid ${panelColor};z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.7);white-space:pre`;
+        cssText = `position:fixed;left:${pos.left}px;top:${pos.top}px;width:${PANEL_W}px;background:#1e1e1e;color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:8px 10px 10px;border-radius:6px;border:1.5px solid ${panelColor};z-index:2147483647;box-shadow:0 4px 20px rgba(0,0,0,.7)`;
       }
 
       const KEY_W = 14;
       const lines = rows.map(([k, v]) => {
-        if (k.startsWith('───')) return `<span style="color:#555">${k}</span>`;
-        return `<span style="color:#808080">${(k + ' ').padEnd(KEY_W, '·')}</span> <span style="color:#9cdcfe">${v || ''}</span>`;
+        if (k.startsWith('───')) return `<div style="color:#555;line-height:18px;margin:2px 0">${k}</div>`;
+        return `<div style="display:flex;line-height:18px;margin:1px 0"><span style="color:#808080;min-width:${KEY_W}ch;flex-shrink:0">${k}</span><span style="color:#9cdcfe;word-break:break-all;overflow-wrap:anywhere;min-width:0">${v || ''}</span></div>`;
       });
 
       const panel = document.createElement('div');
       panel.className = '__vi_overlay';
       panel.style.cssText = cssText;
-      panel.innerHTML = `<div style="color:${panelColor};font-weight:700;margin-bottom:4px">✦ ${el.tagName.toLowerCase()}</div>` + lines.join('\n');
+      panel.innerHTML = `<div style="color:${panelColor};font-weight:700;margin-bottom:4px">✦ ${el.tagName.toLowerCase()}</div>` + lines.join('');
       document.body.appendChild(panel);
       
       // Solo habilitar arrastrado si no está acoplado lateralmente
       if (!isDocked) {
         window.__vi_drag(panel);
+      }
+
+      // Handle de redimensionado arrastrando el borde izquierdo (solo docked)
+      if (isDocked) {
+        const rh = document.createElement('div');
+        rh.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:6px;cursor:ew-resize;z-index:1';
+        rh.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const startX = e.clientX;
+          const startW = panel.getBoundingClientRect().width;
+          const onMove = (me) => {
+            const newW = Math.max(200, Math.min(600, startW - (me.clientX - startX)));
+            panel.style.width = newW + 'px';
+            window.__vi_settings.dockWidth = Math.round(newW);
+            window.__vi_applyDockStyles();
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            localStorage.setItem('__vi_settings', JSON.stringify(window.__vi_settings));
+            if (window.__vi_saveSettingsNode) window.__vi_saveSettingsNode(window.__vi_settings);
+          };
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        });
+        panel.appendChild(rh);
       }
 
       const badge = document.createElement('div');
