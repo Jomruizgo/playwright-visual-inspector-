@@ -46,7 +46,7 @@ export async function injectListeners(page, vp) {
 
     // ── Utilidad: applyDockStyles ──────────────────────────────────────────────
     window.__vi_applyDockStyles = function() {
-      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 900);
+      const isDocked = window.__vi_settings.responsiveDock;
       const styleId = '__vi_dock_layout_styles';
       let style = document.getElementById(styleId);
       
@@ -578,8 +578,8 @@ export async function injectListeners(page, vp) {
         ? window.__vi_settings.customHighlightColor 
         : '#f1c40f';
 
-      // Determinar si se acopla a un lado en base al diseño responsivo (ancho <= 900)
-      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 900);
+      // Determinar si se acopla a un lado según ajuste responsiveDock
+      const isDocked = window.__vi_settings.responsiveDock;
 
       const PANEL_W = isDocked ? (window.__vi_settings.dockWidth || 280) : 480;
       const PANEL_H = rows.length * 18 + 28;
