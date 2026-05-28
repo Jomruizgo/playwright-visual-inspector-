@@ -586,7 +586,7 @@ export async function injectListeners(page, vp) {
 
       let cssText = '';
       if (isDocked) {
-        cssText = `position:fixed;right:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;border-left:2.5px solid ${panelColor};position:relative`;
+        cssText = `position:fixed;right:0;top:0;bottom:0;width:${PANEL_W}px;height:100vh;background:#1e1e1ee6;backdrop-filter:blur(8px);color:#d4d4d4;font-family:Consolas,monospace;font-size:11px;line-height:18px;padding:12px;z-index:2147483647;box-shadow:0 0 20px rgba(0,0,0,.7);overflow-y:auto;box-sizing:border-box;margin:0;border-radius:0;border-left:2.5px solid ${panelColor}`;
       } else {
         const OUTLINE = 4, GAP = 12;
         const exp = { left: rec.left - OUTLINE, top: rec.top - OUTLINE, right: rec.right + OUTLINE, bottom: rec.bottom + OUTLINE };
@@ -629,7 +629,8 @@ export async function injectListeners(page, vp) {
       // Handle de redimensionado arrastrando el borde izquierdo (solo docked)
       if (isDocked) {
         const rh = document.createElement('div');
-        rh.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:6px;cursor:ew-resize;z-index:1';
+        const initLeft = window.innerWidth - (window.__vi_settings.dockWidth || 280);
+        rh.style.cssText = `position:fixed;left:${initLeft}px;top:0;height:100vh;width:6px;cursor:ew-resize;z-index:2147483648`;
         rh.addEventListener('mousedown', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -638,6 +639,7 @@ export async function injectListeners(page, vp) {
           const onMove = (me) => {
             const newW = Math.max(200, Math.min(600, startW - (me.clientX - startX)));
             panel.style.width = newW + 'px';
+            rh.style.left = (window.innerWidth - newW) + 'px';
             window.__vi_settings.dockWidth = Math.round(newW);
             window.__vi_applyDockStyles();
           };
@@ -650,7 +652,7 @@ export async function injectListeners(page, vp) {
           document.addEventListener('mousemove', onMove);
           document.addEventListener('mouseup', onUp);
         });
-        panel.appendChild(rh);
+        document.body.appendChild(rh);
       }
 
       const badge = document.createElement('div');
