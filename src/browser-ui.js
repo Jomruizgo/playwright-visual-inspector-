@@ -46,7 +46,7 @@ export async function injectListeners(page, vp) {
 
     // ── Utilidad: applyDockStyles ──────────────────────────────────────────────
     window.__vi_applyDockStyles = function() {
-      const isDocked = window.__vi_settings.responsiveDock;
+      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 900);
       const styleId = '__vi_dock_layout_styles';
       let style = document.getElementById(styleId);
       
@@ -578,8 +578,8 @@ export async function injectListeners(page, vp) {
         ? window.__vi_settings.customHighlightColor 
         : '#f1c40f';
 
-      // Determinar si se acopla a un lado según ajuste responsiveDock
-      const isDocked = window.__vi_settings.responsiveDock;
+      // Determinar si se acopla a un lado (solo en pantallas angostas con la opción activa)
+      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 900);
 
       const PANEL_W = isDocked ? (window.__vi_settings.dockWidth || 280) : 480;
       const PANEL_H = rows.length * 18 + 28;
@@ -626,34 +626,46 @@ export async function injectListeners(page, vp) {
         window.__vi_drag(panel);
       }
 
-      // Handle de redimensionado arrastrando el borde izquierdo (solo docked)
-      if (isDocked) {
+      // Handles de redimensionado por borde lateral (position:absolute dentro del fixed panel)
+      const addRH = (side) => {
         const rh = document.createElement('div');
-        const initLeft = window.innerWidth - (window.__vi_settings.dockWidth || 280);
-        rh.style.cssText = `position:fixed;left:${initLeft}px;top:0;height:100vh;width:6px;cursor:ew-resize;z-index:2147483648`;
+        rh.style.cssText = `position:absolute;${side}:0;top:0;bottom:0;width:6px;cursor:ew-resize;z-index:1`;
         rh.addEventListener('mousedown', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const startX = e.clientX;
-          const startW = panel.getBoundingClientRect().width;
+          const startX    = e.clientX;
+          const startW    = panel.getBoundingClientRect().width;
+          const startLeft = parseFloat(panel.style.left) || 0;
           const onMove = (me) => {
-            const newW = Math.max(200, Math.min(600, startW - (me.clientX - startX)));
+            const delta = me.clientX - startX;
+            let newW;
+            if (side === 'right') {
+              newW = Math.max(200, Math.min(800, startW + delta));
+            } else {
+              newW = Math.max(200, Math.min(800, startW - delta));
+              if (!isDocked) panel.style.left = (startLeft + startW - newW) + 'px';
+            }
             panel.style.width = newW + 'px';
-            rh.style.left = (window.innerWidth - newW) + 'px';
-            window.__vi_settings.dockWidth = Math.round(newW);
-            window.__vi_applyDockStyles();
+            if (isDocked) {
+              window.__vi_settings.dockWidth = Math.round(newW);
+              window.__vi_applyDockStyles();
+            }
           };
           const onUp = () => {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
-            localStorage.setItem('__vi_settings', JSON.stringify(window.__vi_settings));
-            if (window.__vi_saveSettingsNode) window.__vi_saveSettingsNode(window.__vi_settings);
+            if (isDocked) {
+              localStorage.setItem('__vi_settings', JSON.stringify(window.__vi_settings));
+              if (window.__vi_saveSettingsNode) window.__vi_saveSettingsNode(window.__vi_settings);
+            }
           };
           document.addEventListener('mousemove', onMove);
           document.addEventListener('mouseup', onUp);
         });
-        document.body.appendChild(rh);
-      }
+        panel.appendChild(rh);
+      };
+      addRH('left');
+      if (!isDocked) addRH('right');
 
       const badge = document.createElement('div');
       badge.className = '__vi_badge';
