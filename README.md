@@ -132,6 +132,7 @@ Los atajos se activan directamente en el browser, sin necesidad de volver a la t
 | **Ctrl+Shift+S** | Auto-scan completo / Escanear cola / Capturar en modo manual |
 | **Ctrl+Shift+M** | Activar / desactivar modo manual |
 | **Ctrl+Shift+Q** | Activar / desactivar modo cola de selección |
+| **Ctrl+Shift+D** | Activar / desactivar modo medición de cotas |
 | **Ctrl+Shift+X** | Cerrar herramienta |
 | **Shift+Clic** *(en modo manual)* | Comparar alineación entre dos elementos |
 | **Alt+Clic** *(en modo cola)* | Añadir o quitar elemento de la cola |
@@ -159,6 +160,39 @@ Permite elegir exactamente qué elementos escanear antes de ejecutar el scan.
 5. `Ctrl+Shift+Q` → cancela y limpia la cola sin escanear
 
 > **Nota en Linux:** `Alt+Clic` puede ser capturado por el gestor de ventanas para mover ventanas. Si esto ocurre, deshabilítalo en la configuración del escritorio (en GNOME: *Configuración → Accesibilidad → Interacción* o `dconf-editor` → `/org/gnome/desktop/wm/preferences/mouse-button-modifier`).
+
+---
+
+### Modo medición de cotas (`Ctrl+Shift+D`)
+
+Permite trazar cotas de ingeniería directamente sobre la página, con el mismo flujo de tres clics que usan herramientas CAD como SolidWorks o AutoCAD.
+
+**Flujo de tres clics:**
+
+1. **1er clic** — fija el primer punto de referencia (con snap automático a los bordes de los elementos dentro de 8 px).
+2. **2do clic** — fija el segundo punto. El eje de la cota (horizontal / vertical) se determina por el eje dominante entre los dos puntos.
+3. **3er clic** — posiciona la línea de cota: el cursor define la separación perpendicular respecto a los puntos.
+
+**Preview en tiempo real:**
+- Fase 1 (pt1 fijado): línea guía punteada con la distancia tentativa.
+- Fase 2 (pt2 fijado): cota completa con líneas de proyección siguiendo al cursor.
+
+**Visual de la cota (estilo drafting):**
+- **Líneas de proyección**: parten del objeto hacia la línea de cota con gap y extensión de 4 px, al 65 % de opacidad.
+- **Línea de cota**: con ticks en los extremos y la etiqueta centrada en un hueco de la línea (sin cruzar el texto).
+- **Puntos de anclaje**: marcan exactamente los puntos del objeto.
+
+**Gestión de cotas existentes:**
+
+| Acción | Resultado |
+|--------|-----------|
+| Clic sobre una cota | La selecciona (naranja + anillos) |
+| Clic sobre un punto de anclaje de cota seleccionada | Entra en modo mover ese punto (verde) |
+| **Supr** con cota seleccionada | Elimina la cota |
+| **Escape** con punto en movimiento | Cancela el movimiento |
+| **Escape** con pt1/pt2 activos | Cancela la cota en curso |
+| **Escape** sin nada activo | Sale del modo medición (las cotas se conservan visibles) |
+| `Ctrl+Shift+D` (estando en modo medición) | Limpia todas las cotas y sale |
 
 ---
 
@@ -250,6 +284,13 @@ Este panel te permite configurar los siguientes aspectos:
    - **Acoplamiento Lateral (Side Dock)**: Cuando el ancho del viewport es menor o igual a `900px`, el panel de propiedades se fija a un lateral **fuera del área de contenido**. El viewport de Playwright se expande automáticamente en `dockWidth` píxeles adicionales, de modo que el contenido de la página ocupa exactamente el ancho solicitado (p. ej. 375 px) y el panel ocupa el espacio extra adyacente — sin solaparse con la vista inspeccionada.
    - **Ancho del Sidebar**: Ajusta el ancho de la barra lateral (de `200px` a `450px`).
    - *Nota*: Los screenshots resultantes muestran el contenido a su ancho real junto al panel de propiedades, sin ninguna superposición.
+5. **Modo Medición**:
+   - **Color de cotas**: selector de color para personalizar el color de todas las cotas dibujadas. El cambio se aplica en tiempo real al overlay y al badge de estado.
+
+### Panel de propiedades — mejoras visuales
+
+- **Ajuste de ancho por arrastre**: en cualquier tamaño de pantalla, coloca el cursor sobre el borde izquierdo o derecho del panel de propiedades — el cursor cambia a `↔`. Haz clic sostenido y arrastra para ajustar el ancho libremente (entre 200 px y 800 px).
+- **Salto de línea en valores largos**: valores como `font-family` que exceden el ancho del panel hacen salto de línea automático dentro de su celda, sin desbordar ni truncar.
 
 ### Persistencia de Ajustes
 Toda tu configuración se guarda automáticamente en `localStorage` y se sincroniza globalmente en el archivo local `visual-inspector-settings.json` en la raíz del proyecto. Esto asegura que tus preferencias se mantengan consistentes al navegar entre diferentes dominios e incluso al reiniciar la herramienta.
