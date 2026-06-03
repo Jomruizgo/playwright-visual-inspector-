@@ -87,7 +87,7 @@ async function main() {
   }
 
   const isMobile = width <= 768;
-  const isDocked  = !isMobile && settings.responsiveDock && (width <= 900);
+  const isDocked  = settings.responsiveDock && (width <= 900);
   const playViewport = {
     width: isDocked ? (width + (settings.dockWidth || 280)) : width,
     height: height
