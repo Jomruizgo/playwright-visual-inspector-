@@ -86,14 +86,23 @@ async function main() {
     fs.writeFileSync(settingsFile, JSON.stringify(DEFAULT_SETTINGS, null, 2), 'utf8');
   }
 
-  const isDocked = settings.responsiveDock && (width <= 900);
+  const isMobile = width <= 768;
+  const isDocked  = !isMobile && settings.responsiveDock && (width <= 900);
   const playViewport = {
     width: isDocked ? (width + (settings.dockWidth || 280)) : width,
     height: height
   };
 
   const browser = await chromium.launch({ headless: false, slowMo: 50 });
-  const ctx     = await browser.newContext({ viewport: playViewport });
+  const ctx     = await browser.newContext({
+    viewport: playViewport,
+    ...(isMobile ? {
+      isMobile:          true,
+      hasTouch:          true,
+      deviceScaleFactor: 2,
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1',
+    } : {}),
+  });
 
   // Exponer función para guardar configuraciones desde el navegador
   await ctx.exposeFunction('__vi_saveSettingsNode', (newSettings) => {
@@ -109,6 +118,14 @@ async function main() {
   await ctx.addInitScript((s) => {
     window.__vi_settings = s;
   }, settings);
+
+  // Inyectar flag de emulación móvil
+  await ctx.addInitScript((m) => {
+    window.__vi_isMobile = m;
+  }, isMobile);
+
+  log(`Modo: ${isMobile ? '\uD83D\uDCF1 Mobile (emulación activa)' : '\uD83D\uDDA5️  Desktop'}${isDocked ? ' · panel acoplado' : ''}`);
+  log('');
 
   const page    = await ctx.newPage();
 
