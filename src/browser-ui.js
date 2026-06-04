@@ -46,7 +46,7 @@ export async function injectListeners(page, vp) {
 
     // ── Utilidad: applyDockStyles ──────────────────────────────────────────────
     window.__vi_applyDockStyles = function() {
-      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 900);
+      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 768);
       const styleId = '__vi_dock_layout_styles';
       let style = document.getElementById(styleId);
       
@@ -579,7 +579,7 @@ export async function injectListeners(page, vp) {
         : '#f1c40f';
 
       // Determinar si se acopla a un lado (solo en pantallas angostas con la opción activa)
-      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 900);
+      const isDocked = window.__vi_settings.responsiveDock && (vpW <= 768);
 
       const PANEL_W = isDocked ? (window.__vi_settings.dockWidth || 280) : 480;
       const PANEL_H = rows.length * 18 + 28;
@@ -612,7 +612,7 @@ export async function injectListeners(page, vp) {
       const KEY_W = 14;
       const lines = rows.map(([k, v]) => {
         if (k.startsWith('───')) return `<div style="color:#555;line-height:18px;margin:2px 0">${k}</div>`;
-        return `<div style="display:flex;line-height:18px;margin:1px 0"><span style="color:#808080;min-width:${KEY_W}ch;flex-shrink:0">${k}</span><span style="color:#9cdcfe;word-break:break-all;overflow-wrap:anywhere;min-width:0">${v || ''}</span></div>`;
+        return `<div style="display:flex;min-width:0;line-height:18px;margin:1px 0"><span style="color:#808080;width:${KEY_W * 7}px;flex-shrink:0;white-space:nowrap">${k}</span><span style="color:#9cdcfe;flex:1;min-width:0;word-break:break-all;overflow-wrap:anywhere">${v || ''}</span></div>`;
       });
 
       const panel = document.createElement('div');
